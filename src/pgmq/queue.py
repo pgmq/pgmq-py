@@ -46,7 +46,7 @@ class PGMQueue:
         self.logger = logging.getLogger(__name__)
 
         if self.verbose:
-            log_filename = self.log_filename or datetime.now().strftime(
+            log_filename = self.log_filename or datetime.datetime.now().strftime(
                 "pgmq_debug_%Y%m%d_%H%M%S.log"
             )
             file_handler = logging.FileHandler(
