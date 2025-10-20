@@ -1,5 +1,7 @@
-# decorators.py
+# src/pgmq/decorators.py
+
 import functools
+from pgmq.logger import PGMQLogger
 
 
 def transaction(func):
@@ -13,17 +15,19 @@ def transaction(func):
             if "conn" not in kwargs:
                 with self.pool.connection() as conn:
                     with conn.transaction():
-                        self.logger.debug(f"Transaction started with conn: {conn}")
+                        PGMQLogger.log_transaction_start(
+                            self.logger, func.__name__, conn_id=id(conn)
+                        )
                         try:
                             kwargs["conn"] = conn  # Inject 'conn' into kwargs
                             result = func(*args, **kwargs)
-                            self.logger.debug(
-                                f"Transaction completed with conn: {conn}"
+                            PGMQLogger.log_transaction_success(
+                                self.logger, func.__name__, conn_id=id(conn)
                             )
                             return result
                         except Exception as e:
-                            self.logger.error(
-                                f"Transaction failed with exception: {e}, rolling back."
+                            PGMQLogger.log_transaction_error(
+                                self.logger, func.__name__, e, conn_id=id(conn)
                             )
                             raise
             else:
@@ -35,17 +39,19 @@ def transaction(func):
             if "conn" not in kwargs:
                 with queue.pool.connection() as conn:
                     with conn.transaction():
-                        queue.logger.debug(f"Transaction started with conn: {conn}")
+                        PGMQLogger.log_transaction_start(
+                            queue.logger, func.__name__, conn_id=id(conn)
+                        )
                         try:
                             kwargs["conn"] = conn  # Inject 'conn' into kwargs
                             result = func(*args, **kwargs)
-                            queue.logger.debug(
-                                f"Transaction completed with conn: {conn}"
+                            PGMQLogger.log_transaction_success(
+                                queue.logger, func.__name__, conn_id=id(conn)
                             )
                             return result
                         except Exception as e:
-                            queue.logger.error(
-                                f"Transaction failed with exception: {e}, rolling back."
+                            PGMQLogger.log_transaction_error(
+                                queue.logger, func.__name__, e, conn_id=id(conn)
                             )
                             raise
             else:
@@ -63,13 +69,22 @@ def async_transaction(func):
             async with self.pool.acquire() as conn:
                 txn = conn.transaction()
                 await txn.start()
+                PGMQLogger.log_transaction_start(
+                    self.logger, func.__name__, conn_id=id(conn)
+                )
                 try:
                     kwargs["conn"] = conn
                     result = await func(self, *args, **kwargs)
                     await txn.commit()
+                    PGMQLogger.log_transaction_success(
+                        self.logger, func.__name__, conn_id=id(conn)
+                    )
                     return result
-                except Exception:
+                except Exception as e:
                     await txn.rollback()
+                    PGMQLogger.log_transaction_error(
+                        self.logger, func.__name__, e, conn_id=id(conn)
+                    )
                     raise
         else:
             return await func(self, *args, **kwargs)
