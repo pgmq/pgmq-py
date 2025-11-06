@@ -1,10 +1,7 @@
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from pgmq.queue import Message, PGMQueue  # type: ignore
 from pgmq.decorators import transaction, async_transaction
-
-if TYPE_CHECKING:  # pragma: no cover
-    from fastapi import FastAPI
 
 
 def create_app(queue: Optional[PGMQueue] = None):

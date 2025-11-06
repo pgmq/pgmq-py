@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List
+import unittest
 
-import pytest
-
-pytest.importorskip("fastapi")
-pytest.importorskip("fastapi.testclient")
-
-from fastapi.testclient import TestClient
-
-from pgmq import Message, QueueMetrics, create_app
+try:
+    from fastapi.testclient import TestClient
+    from pgmq import Message, QueueMetrics, create_app
+    FASTAPI_AVAILABLE = True
+except ImportError:
+    FASTAPI_AVAILABLE = False
 
 
 class FakeQueue:
@@ -88,51 +87,54 @@ class FakeQueue:
         return [self.metrics(queue) for queue in self._queues]
 
 
-def create_client() -> TestClient:
+def create_client():
+    if not FASTAPI_AVAILABLE:
+        return None
     fake_queue = FakeQueue()
     app = create_app(queue=fake_queue)
     return TestClient(app)
 
 
-def test_send_and_read_messages():
-    client = create_client()
+@unittest.skipIf(not FASTAPI_AVAILABLE, "FastAPI not available")
+class TestAPI(unittest.TestCase):
+    def test_send_and_read_messages(self):
+        client = create_client()
 
-    send_response = client.post("/queues/test/messages", json={"message": {"foo": "bar"}})
-    assert send_response.status_code == 200
-    msg_id = send_response.json()["msg_id"]
+        send_response = client.post("/queues/test/messages", json={"message": {"foo": "bar"}})
+        self.assertEqual(send_response.status_code, 200)
+        msg_id = send_response.json()["msg_id"]
 
-    read_response = client.post("/queues/test/messages/read", json={"batch_size": 1})
-    assert read_response.status_code == 200
-    messages = read_response.json()["messages"]
-    assert len(messages) == 1
-    assert messages[0]["msg_id"] == msg_id
-    assert messages[0]["message"] == {"foo": "bar"}
+        read_response = client.post("/queues/test/messages/read", json={"batch_size": 1})
+        self.assertEqual(read_response.status_code, 200)
+        messages = read_response.json()["messages"]
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["msg_id"], msg_id)
+        self.assertEqual(messages[0]["message"], {"foo": "bar"})
 
+    def test_batch_operations_and_metrics(self):
+        client = create_client()
 
-def test_batch_operations_and_metrics():
-    client = create_client()
+        batch_response = client.post(
+            "/queues/test/messages/batch",
+            json={"messages": [{"foo": 1}, {"bar": 2}]},
+        )
+        self.assertEqual(batch_response.status_code, 200)
+        msg_ids = batch_response.json()["msg_ids"]
+        self.assertEqual(len(msg_ids), 2)
 
-    batch_response = client.post(
-        "/queues/test/messages/batch",
-        json={"messages": [{"foo": 1}, {"bar": 2}]},
-    )
-    assert batch_response.status_code == 200
-    msg_ids = batch_response.json()["msg_ids"]
-    assert len(msg_ids) == 2
+        delete_response = client.delete(
+            "/queues/test/messages",
+            json={"msg_ids": [msg_ids[0]]},
+        )
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(delete_response.json()["deleted"], [msg_ids[0]])
 
-    delete_response = client.delete(
-        "/queues/test/messages",
-        json={"msg_ids": [msg_ids[0]]},
-    )
-    assert delete_response.status_code == 200
-    assert delete_response.json()["deleted"] == [msg_ids[0]]
+        metrics_response = client.get("/queues/test/metrics")
+        self.assertEqual(metrics_response.status_code, 200)
+        metrics = metrics_response.json()["metrics"]
+        self.assertEqual(metrics["queue_name"], "test")
+        self.assertEqual(metrics["queue_length"], 1)
 
-    metrics_response = client.get("/queues/test/metrics")
-    assert metrics_response.status_code == 200
-    metrics = metrics_response.json()["metrics"]
-    assert metrics["queue_name"] == "test"
-    assert metrics["queue_length"] == 1
-
-    all_metrics = client.get("/queues/metrics")
-    assert all_metrics.status_code == 200
-    assert len(all_metrics.json()["metrics"]) == 1
+        all_metrics = client.get("/queues/metrics")
+        self.assertEqual(all_metrics.status_code, 200)
+        self.assertEqual(len(all_metrics.json()["metrics"]), 1)
