@@ -1,6 +1,6 @@
 [project]
 name = "pgmq"
-version = "1.0.1"
+version = "1.0.2"
 description = "Python client for the PGMQ Postgres extension."
 readme = "README.md"
 license = "Apache-2.0"
