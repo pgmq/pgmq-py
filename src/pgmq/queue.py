@@ -121,7 +121,7 @@ class PGMQueue:
     def drop_queue(self, queue: str, partitioned: bool = False, conn=None) -> bool:
         """Drop a queue."""
         self.logger.debug(f"drop_queue called with conn: {conn}")
-        query = "select pgmq.drop_queue(queue_name=>(%s, partitioned=>%s);"
+        query = "select pgmq.drop_queue(queue_name=>%s, partitioned=>%s);"
         result = self._execute_query_with_result(query, [queue, partitioned], conn=conn)
         return result[0][0]
 
@@ -141,17 +141,17 @@ class PGMQueue:
         self.logger.debug(f"send called with conn: {conn}")
         result = None
         if delay:
-            query = "select * from pgmq.send(queue_name=>%s::text, message=>%s::jsonb, delay=>%s::integer);"
+            query = "select * from pgmq.send(queue_name=>%s::text, msg=>%s::jsonb, delay=>%s::integer);"
             result = self._execute_query_with_result(
                 query, [queue, Jsonb(message), delay], conn=conn
             )
         elif tz:
-            query = "select * from pgmq.send(queue_name=>%s::text, message=>%s::jsonb, delay=>%s::timestamptz);"
+            query = "select * from pgmq.send(queue_name=>%s::text, msg=>%s::jsonb, delay=>%s::timestamptz);"
             result = self._execute_query_with_result(
                 query, [queue, Jsonb(message), tz], conn=conn
             )
         else:
-            query = "select * from pgmq.send(queue_name=>%s::text, message=>%s::jsonb);"
+            query = "select * from pgmq.send(queue_name=>%s::text, msg=>%s::jsonb);"
             result = self._execute_query_with_result(
                 query, [queue, Jsonb(message)], conn=conn
             )
@@ -258,7 +258,7 @@ class PGMQueue:
     def delete_batch(self, queue: str, msg_ids: List[int], conn=None) -> List[int]:
         """Delete multiple messages from a queue."""
         self.logger.debug(f"delete_batch called with conn: {conn}")
-        query = "select * from pgmq.delete_batch(queue_name=>%s, msg_ids=>%s);"
+        query = "select * from pgmq.delete(queue_name=>%s, msg_ids=>%s);"
         result = self._execute_query_with_result(query, [queue, msg_ids], conn=conn)
         return [x[0] for x in result]
 
