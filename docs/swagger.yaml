@@ -1,0 +1,464 @@
+openapi: 3.0.3
+info:
+  title: PGMQ REST API
+  version: 1.0.0
+  description: |
+    This OpenAPI document describes the REST interface exposed by the optional
+    FastAPI integration that ships with **pgmq**. The service provides queue
+    management, message lifecycle helpers, and queue metrics endpoints to make
+    it easy to integrate applications with PostgreSQL Message Queues.
+  contact:
+    name: PGMQ Maintainers
+    url: https://github.com/tembo-io/pgmq-py
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+components:
+  schemas:
+    Message:
+      type: object
+      required: [msg_id, read_ct, enqueued_at, vt, message]
+      properties:
+        msg_id:
+          type: integer
+          format: int64
+          description: Unique identifier for the message within the queue.
+        read_ct:
+          type: integer
+          format: int32
+          description: How many times the message has been read.
+        enqueued_at:
+          type: string
+          format: date-time
+          description: Timestamp when the message was enqueued.
+        vt:
+          type: string
+          format: date-time
+          description: Timestamp when the message will become visible again.
+        message:
+          type: object
+          additionalProperties: true
+          description: Arbitrary JSON payload carried by the message.
+    QueueMetrics:
+      type: object
+      required:
+        [queue_name, queue_length, newest_msg_age_sec, oldest_msg_age_sec, total_messages, scrape_time]
+      properties:
+        queue_name:
+          type: string
+          description: Name of the queue the metrics correspond to.
+        queue_length:
+          type: integer
+          format: int64
+          description: Number of messages currently available in the queue.
+        newest_msg_age_sec:
+          type: number
+          format: float
+          description: Age in seconds of the newest visible message.
+        oldest_msg_age_sec:
+          type: number
+          format: float
+          description: Age in seconds of the oldest visible message.
+        total_messages:
+          type: integer
+          format: int64
+          description: Total number of messages processed by the queue.
+        scrape_time:
+          type: string
+          format: date-time
+          description: Timestamp when the metrics snapshot was taken.
+    SendMessagePayload:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: object
+          additionalProperties: true
+          description: Arbitrary JSON payload to enqueue.
+        delay:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Optional delay in seconds before the message becomes visible.
+        tz:
+          type: string
+          format: date-time
+          description: Optional timestamp when the message becomes visible.
+    SendBatchPayload:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          description: List of JSON payloads to enqueue as a batch.
+          items:
+            type: object
+            additionalProperties: true
+        delay:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Optional delay applied to the batch in seconds.
+        tz:
+          type: string
+          format: date-time
+          description: Optional timestamp when the batch becomes visible.
+    ReadMessagesPayload:
+      type: object
+      properties:
+        batch_size:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1024
+          default: 1
+          description: Number of messages to retrieve in a single call.
+        vt:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Optional visibility timeout override in seconds.
+    DeleteBatchPayload:
+      type: object
+      required: [msg_ids]
+      properties:
+        msg_ids:
+          type: array
+          description: Message identifiers to delete.
+          items:
+            type: integer
+            format: int64
+    ArchiveBatchPayload:
+      type: object
+      required: [msg_ids]
+      properties:
+        msg_ids:
+          type: array
+          description: Message identifiers to archive.
+          items:
+            type: integer
+            format: int64
+  responses:
+    NotFound:
+      description: The requested resource could not be found.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+    ServerError:
+      description: An unexpected server error occurred.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+paths:
+  /queues:
+    get:
+      tags: [Queues]
+      summary: List available queues
+      operationId: listQueues
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queues:
+                    type: array
+                    items:
+                      type: string
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/messages:
+    post:
+      tags: [Messages]
+      summary: Enqueue a message
+      operationId: sendMessage
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessagePayload'
+      responses:
+        '200':
+          description: Message enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg_id:
+                    type: integer
+                    format: int64
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Messages]
+      summary: Delete a batch of messages by id
+      operationId: deleteBatch
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteBatchPayload'
+      responses:
+        '200':
+          description: Delete confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/messages/batch:
+    post:
+      tags: [Messages]
+      summary: Enqueue a batch of messages
+      operationId: sendBatch
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendBatchPayload'
+      responses:
+        '200':
+          description: Messages enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg_ids:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/messages/read:
+    post:
+      tags: [Messages]
+      summary: Read (peek) messages from a queue
+      operationId: readMessages
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadMessagesPayload'
+      responses:
+        '200':
+          description: Messages retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/messages/pop:
+    post:
+      tags: [Messages]
+      summary: Pop a message from a queue
+      operationId: popMessage
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Popped message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/messages/{msg_id}:
+    delete:
+      tags: [Messages]
+      summary: Delete a single message by id
+      operationId: deleteMessage
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: msg_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Delete confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/archive/{msg_id}:
+    post:
+      tags: [Archive]
+      summary: Archive a single message by id
+      operationId: archiveMessage
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: msg_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Archive confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  archived:
+                    type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/archive/batch:
+    post:
+      tags: [Archive]
+      summary: Archive a batch of messages
+      operationId: archiveBatch
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveBatchPayload'
+      responses:
+        '200':
+          description: Archive confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  archived:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/{queue_name}/metrics:
+    get:
+      tags: [Metrics]
+      summary: Retrieve metrics for a specific queue
+      operationId: queueMetrics
+      parameters:
+        - in: path
+          name: queue_name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Metrics snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metrics:
+                    $ref: '#/components/schemas/QueueMetrics'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /queues/metrics:
+    get:
+      tags: [Metrics]
+      summary: Retrieve metrics for all queues
+      operationId: allQueueMetrics
+      responses:
+        '200':
+          description: Metrics for all queues
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metrics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QueueMetrics'
+        '500':
+          $ref: '#/components/responses/ServerError'

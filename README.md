@@ -86,6 +86,18 @@ queue.create_queue("my_queue")
 queue.create_partitioned_queue("my_partitioned_queue", partition_interval=10000)
 ```
 
+### REST API and Swagger documentation
+
+An optional FastAPI-powered REST API is available for teams that want to expose
+queue operations over HTTP. Create an application with
+`pgmq.api.create_app()`, or mount it within an existing ASGI server, and then
+visit the automatically generated Swagger UI at `/docs` or ReDoc at `/redoc`.
+
+The repository also includes a static OpenAPI specification that can be used
+with tools such as [Swagger UI](https://swagger.io/tools/swagger-ui/) or
+[Insomnia](https://insomnia.rest/). You can find it at
+[`docs/swagger.yaml`](docs/swagger.yaml).
+
 ### List all queues
 
 ```python
