@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Union
+from collections.abc import Callable
+from typing import Optional, List, Union, Any
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 import os
@@ -21,7 +22,7 @@ class PGMQueue:
     delay: int = 0
     vt: int = 30
     pool_size: int = 10
-    kwargs: dict = field(default_factory=dict)
+    kwargs: Union[dict, Callable[[], dict[str, Any]]] = field(default_factory=dict)
     verbose: bool = False
     log_filename: Optional[str] = None
     init_extension: bool = True
@@ -37,7 +38,10 @@ class PGMQueue:
         user={self.username}
         password={self.password}
         """
-        self.pool = ConnectionPool(conninfo, open=True, **self.kwargs)
+        if callable(self.kwargs):
+            self.pool = ConnectionPool(conninfo, open=True, kwargs=self.kwargs)
+        else:
+            self.pool = ConnectionPool(conninfo, open=True, **self.kwargs)
         self._initialize_logging()
         if self.init_extension:
             self._initialize_extensions()
