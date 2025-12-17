@@ -41,6 +41,10 @@ class PGMQueue:
         if callable(self.kwargs):
             self.pool = ConnectionPool(conninfo, open=True, kwargs=self.kwargs)
         else:
+            if "kwargs" in self.kwargs:
+                raise TypeError(
+                    "The 'kwargs' key is reserved for callables and cannot be used in the kwargs dictionary."
+                )
             self.pool = ConnectionPool(conninfo, open=True, **self.kwargs)
         self._initialize_logging()
         if self.init_extension:
