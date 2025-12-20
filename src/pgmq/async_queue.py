@@ -848,4 +848,3 @@ class PGMQueue:
         PGMQLogger.log_with_context(
             self.logger, logging.DEBUG, "Archive detached", queue=queue
         )
-

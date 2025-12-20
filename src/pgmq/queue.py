@@ -72,6 +72,7 @@ class PGMQueue:
                 rotation=self.log_rotation_size if self.log_rotation else None,
                 retention=self.log_retention if self.log_rotation else None,
             )
+
     def _initialize_extensions(self, conn=None) -> None:
         self._execute_query("create extension if not exists pgmq cascade;", conn=conn)
 
