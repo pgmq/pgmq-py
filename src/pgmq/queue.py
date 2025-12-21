@@ -45,7 +45,6 @@ class PGMQueue:
         user={self.username}
         password={self.password}
         """
-        self.kwargs.setdefault("max_size", self.pool_size)
         self.pool = ConnectionPool(conninfo, open=True, **self.kwargs)
         self._initialize_logging()
         if self.init_extension:
