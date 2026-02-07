@@ -807,7 +807,7 @@ class PGMQueue:
             f"Setting VT for msg_id={msg_id} in queue '{queue}' to vt={vt}"
         )
         row = await conn.fetchrow(
-            "SELECT msg_id, read_ct, enqueued_at, vt, message FROM pgmq.set_vt(queue_name=>$1, msg_id=>$2, vt=>$3);",
+            "SELECT msg_id, read_ct, enqueued_at, vt, message FROM pgmq.set_vt(queue_name=>$1::text, msg_id=>$2::bigint, vt=>$3::integer);",
             queue,
             msg_id,
             vt,

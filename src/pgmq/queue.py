@@ -559,7 +559,7 @@ class PGMQueue:
             msg_id=msg_id,
             vt=vt,
         )
-        query = "select msg_id, read_ct, enqueued_at, vt, message from pgmq.set_vt(queue_name=>%s, msg_id=>%s, vt=>%s);"
+        query = "select msg_id, read_ct, enqueued_at, vt, message from pgmq.set_vt(queue_name=>%s::text, msg_id=>%s::bigint, vt=>%s::integer);"
         result = self._execute_query_with_result(query, [queue, msg_id, vt], conn=conn)[
             0
         ]
