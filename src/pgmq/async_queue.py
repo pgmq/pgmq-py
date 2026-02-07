@@ -515,7 +515,10 @@ class PGMQueue:
 
     async def _pop_internal(self, queue, conn):
         self.logger.debug(f"Popping message from queue '{queue}'")
-        rows = await conn.fetch("SELECT * FROM pgmq.pop(queue_name=>$1);", queue)
+        rows = await conn.fetch(
+            "SELECT msg_id, read_ct, enqueued_at, vt, message FROM pgmq.pop(queue_name=>$1);",
+            queue,
+        )
         messages = [
             Message(
                 msg_id=row[0],
@@ -804,7 +807,7 @@ class PGMQueue:
             f"Setting VT for msg_id={msg_id} in queue '{queue}' to vt={vt}"
         )
         row = await conn.fetchrow(
-            "SELECT * FROM pgmq.set_vt(queue_name=>$1, msg_id=>$2, vt=>$3);",
+            "SELECT msg_id, read_ct, enqueued_at, vt, message FROM pgmq.set_vt(queue_name=>$1, msg_id=>$2, vt=>$3);",
             queue,
             msg_id,
             vt,

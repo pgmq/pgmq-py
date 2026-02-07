@@ -270,7 +270,7 @@ class PGMQueue:
         PGMQLogger.log_with_context(
             self.logger, logging.DEBUG, "Reading message", queue=queue, vt=vt or self.vt
         )
-        query = "select * from pgmq.read(queue_name=>%s::text, vt=>%s::integer, qty=>%s::integer);"
+        query = "select msg_id, read_ct, enqueued_at, vt, message from pgmq.read(queue_name=>%s::text, vt=>%s::integer, qty=>%s::integer);"
         rows = self._execute_query_with_result(
             query, [queue, vt or self.vt, 1], conn=conn
         )
@@ -304,7 +304,7 @@ class PGMQueue:
             vt=vt or self.vt,
             batch_size=batch_size,
         )
-        query = "select * from pgmq.read(queue_name=>%s::text, vt=>%s::integer, qty=>%s::integer);"
+        query = "select msg_id, read_ct, enqueued_at, vt, message from pgmq.read(queue_name=>%s::text, vt=>%s::integer, qty=>%s::integer);"
         rows = self._execute_query_with_result(
             query, [queue, vt or self.vt, batch_size], conn=conn
         )
@@ -344,7 +344,7 @@ class PGMQueue:
             max_poll_seconds=max_poll_seconds,
             poll_interval_ms=poll_interval_ms,
         )
-        query = "select * from pgmq.read_with_poll(queue_name=>%s::text, vt=>%s::integer, qty=>%s::integer, max_poll_seconds=>%s::integer, poll_interval_ms=>%s::integer);"
+        query = "select msg_id, read_ct, enqueued_at, vt, message from pgmq.read_with_poll(queue_name=>%s::text, vt=>%s::integer, qty=>%s::integer, max_poll_seconds=>%s::integer, poll_interval_ms=>%s::integer);"
         params = [queue, vt or self.vt, qty, max_poll_seconds, poll_interval_ms]
         rows = self._execute_query_with_result(query, params, conn=conn)
         messages = [
@@ -368,7 +368,7 @@ class PGMQueue:
         PGMQLogger.log_with_context(
             self.logger, logging.DEBUG, "Popping message", queue=queue
         )
-        query = "select * from pgmq.pop(queue_name=>%s);"
+        query = "select msg_id, read_ct, enqueued_at, vt, message from pgmq.pop(queue_name=>%s);"
         rows = self._execute_query_with_result(query, [queue], conn=conn)
         messages = [
             Message(msg_id=x[0], read_ct=x[1], enqueued_at=x[2], vt=x[3], message=x[4])
@@ -559,7 +559,7 @@ class PGMQueue:
             msg_id=msg_id,
             vt=vt,
         )
-        query = "select * from pgmq.set_vt(queue_name=>%s, msg_id=>%s, vt=>%s);"
+        query = "select msg_id, read_ct, enqueued_at, vt, message from pgmq.set_vt(queue_name=>%s, msg_id=>%s, vt=>%s);"
         result = self._execute_query_with_result(query, [queue, msg_id, vt], conn=conn)[
             0
         ]
