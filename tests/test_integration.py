@@ -326,9 +326,9 @@ class TestPGMQueueNoExtension:
             # _execute_query should NOT be called with 'create extension' SQL
             for call in mock_execute_query.call_args_list:
                 args, kwargs = call
-                assert "create extension" not in str(
-                    args[0]
-                ), "Should not run create extension SQL"
+                assert "create extension" not in str(args[0]), (
+                    "Should not run create extension SQL"
+                )
 
 
 if __name__ == "__main__":
