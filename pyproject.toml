@@ -23,14 +23,9 @@ classifiers = [
 ]
 
 authors = [
-    { name = "Adam Hendel" },
-]
-
-maintainers = [
-    { name = "Adam Hendel" },
+    { name = "Adam Hendel",email = "adam@hendel.dev" },
     { name = "Ali Tavallaie", email = "ali@techbend.io" },
 ]
-
 dependencies = [
     "orjson>=3.11.3",
     "psycopg[binary,pool]>=3.2.10",
