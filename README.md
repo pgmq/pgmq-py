@@ -1,4 +1,4 @@
-# Python Client for [PGMQ](https://github.com/pgmq/pgmq)
+# Python Client for [PGMQ](https://github.com/pgmq/pgmq)[![PyPI Downloads](https://static.pepy.tech/personalized-badge/pgmq?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/pgmq)
 
 ## Installation
 
