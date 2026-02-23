@@ -1,4 +1,4 @@
-# src/pgmq/logger.py (fixed)
+# src/pgmq/logger.py 
 
 import logging
 import logging.handlers
@@ -8,9 +8,8 @@ import functools
 import asyncio
 import time
 from datetime import datetime
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, Set
 
-# Try to import loguru, fall back to standard logging if not available
 try:
     from loguru import logger as loguru_logger
 
@@ -29,6 +28,8 @@ class PGMQLogger:
     _loggers: Dict[str, Union[logging.Logger, Any]] = {}
     _configured: bool = False
     _use_loguru: bool = LOGURU_AVAILABLE
+    
+    _handler_ids: Set[int] = set()
 
     @classmethod
     def get_logger(
@@ -39,7 +40,7 @@ class PGMQLogger:
         log_format: Optional[str] = None,
         log_level: Optional[Union[int, str]] = None,
         enable_rotation: bool = False,
-        max_bytes: int = 10 * 1024 * 1024,  # 10MB
+        max_bytes: int = 10 * 1024 * 1024,
         backup_count: int = 5,
         structured: bool = False,
         rotation: Optional[str] = None,
@@ -69,7 +70,6 @@ class PGMQLogger:
         if name in cls._loggers:
             return cls._loggers[name]
 
-        # Use loguru if available and not explicitly disabled
         if cls._use_loguru:
             logger = cls._get_loguru_logger(
                 name=name,
@@ -99,6 +99,20 @@ class PGMQLogger:
         return logger
 
     @classmethod
+    def _remove_pgmq_handlers(cls):
+        """Safely remove only handlers added by PGMQ."""
+        if not LOGURU_AVAILABLE or not cls._use_loguru:
+            return
+            
+        ids_to_remove = list(cls._handler_ids)
+        for handler_id in ids_to_remove:
+            try:
+                loguru_logger.remove(handler_id)
+                cls._handler_ids.discard(handler_id)
+            except Exception:
+                cls._handler_ids.discard(handler_id)
+
+    @classmethod
     def _get_standard_logger(
         cls,
         name: str,
@@ -114,11 +128,9 @@ class PGMQLogger:
         """Get a standard Python logging logger."""
         logger = logging.getLogger(name)
 
-        # Skip if already configured with handlers
         if logger.handlers:
             return logger
 
-        # Set log level
         if log_level is not None:
             logger.setLevel(log_level)
         elif verbose:
@@ -126,7 +138,6 @@ class PGMQLogger:
         else:
             logger.setLevel(logging.WARNING)
 
-        # Default format
         if log_format is None:
             if structured:
                 log_format = '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'
@@ -135,12 +146,10 @@ class PGMQLogger:
 
         formatter = logging.Formatter(log_format)
 
-        # Console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
-        # File handler (if verbose or log_filename provided)
         if verbose or log_filename:
             if log_filename is None:
                 log_filename = datetime.now().strftime("pgmq_debug_%Y%m%d_%H%M%S.log")
@@ -172,52 +181,59 @@ class PGMQLogger:
         retention: Optional[str] = None,
         compression: Optional[str] = None,
     ) -> Any:
-        """Get a loguru logger."""
-        # Remove default handler
-        loguru_logger.remove()
+        """
+        Get a loguru logger.
+        
+        When verbose=False and no log_filename, returns a bound logger without
+        adding any handlers to avoid interfering with host application logging.
+        """
+        
+        effective_level = "DEBUG" if verbose else "WARNING"
+        if log_level is not None:
+            if isinstance(log_level, int):
+                level_map = {
+                    logging.DEBUG: "DEBUG",
+                    logging.INFO: "INFO",
+                    logging.WARNING: "WARNING",
+                    logging.ERROR: "ERROR",
+                    logging.CRITICAL: "CRITICAL",
+                }
+                effective_level = level_map.get(log_level, "INFO")
+            else:
+                effective_level = str(log_level)
 
-        # Set log level
-        if log_level is None:
-            log_level = "DEBUG" if verbose else "WARNING"
-        elif isinstance(log_level, int):
-            # Convert standard logging levels to loguru levels
-            level_map = {
-                logging.DEBUG: "DEBUG",
-                logging.INFO: "INFO",
-                logging.WARNING: "WARNING",
-                logging.ERROR: "ERROR",
-                logging.CRITICAL: "CRITICAL",
-            }
-            log_level = level_map.get(log_level, "INFO")
-
-        # Default format
         if log_format is None:
             if structured:
                 log_format = '{{"timestamp": "{time:YYYY-MM-DD HH:mm:ss.SSS}", "level": "{level}", "logger": "{extra[logger]}", "message": "{message}"}}'
             else:
-                log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{extra[logger]}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+                # Removed {extra[logger]} from default format to prevent KeyError 
+                # if host application logs without binding context
+                log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 
-        # Add console handler
-        loguru_logger.add(
-            sys.stderr,
-            format=log_format,
-            level=log_level,
-            enqueue=True,
-            backtrace=True,
-            diagnose=True,
-        )
+        needs_custom_handler = bool(verbose or log_filename)
 
-        # Add file handler if needed
-        if verbose or log_filename:
+        if needs_custom_handler:
+            cls._remove_pgmq_handlers()
+
+            console_id = loguru_logger.add(
+                sys.stderr,
+                format=log_format,
+                level=effective_level,
+                enqueue=True,
+                backtrace=True,
+                diagnose=True,
+            )
+            cls._handler_ids.add(console_id)
+
             if log_filename is None:
                 log_filename = datetime.now().strftime("pgmq_debug_%Y%m%d_%H%M%S.log")
 
             log_path = os.path.join(os.getcwd(), log_filename)
 
-            loguru_logger.add(
+            file_id = loguru_logger.add(
                 log_path,
                 format=log_format,
-                level=log_level,
+                level=effective_level,
                 rotation=rotation or "10 MB",
                 retention=retention or "1 week",
                 compression=compression,
@@ -225,8 +241,8 @@ class PGMQLogger:
                 backtrace=True,
                 diagnose=True,
             )
-
-        # Bind logger name to extra context
+            cls._handler_ids.add(file_id)
+        
         logger = loguru_logger.bind(logger=name)
         return logger
 
@@ -253,8 +269,7 @@ class PGMQLogger:
             cls._use_loguru = use_loguru and LOGURU_AVAILABLE
 
         if cls._use_loguru:
-            # Configure loguru globally
-            loguru_logger.remove()
+            cls._remove_pgmq_handlers()
 
             if log_level is None:
                 log_level = "INFO"
@@ -272,13 +287,15 @@ class PGMQLogger:
                 if structured:
                     log_format = '{{"timestamp": "{time:YYYY-MM-DD HH:mm:ss.SSS}", "level": "{level}", "logger": "{extra[logger]}", "message": "{message}"}}'
                 else:
-                    log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{extra[logger]}</cyan> - <level>{message}</level>"
+                    # Also omit {extra[logger]} here to prevent KeyError in host applications
+                    # Users can override with custom log_format if they need logger names
+                    log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 
-            loguru_logger.add(
+            handler_id = loguru_logger.add(
                 sys.stderr, format=log_format, level=log_level, enqueue=True
             )
+            cls._handler_ids.add(handler_id)
         else:
-            # Configure standard logging globally
             root_logger = logging.getLogger("pgmq")
             root_logger.setLevel(log_level)
 
@@ -290,9 +307,10 @@ class PGMQLogger:
 
             formatter = logging.Formatter(log_format)
 
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(formatter)
-            root_logger.addHandler(console_handler)
+            if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+                console_handler = logging.StreamHandler()
+                console_handler.setFormatter(formatter)
+                root_logger.addHandler(console_handler)
 
     @classmethod
     def log_with_context(
@@ -312,11 +330,9 @@ class PGMQLogger:
             **context: Additional context data
         """
         if cls._use_loguru:
-            # Use loguru's bind method for context
             if context:
                 logger = logger.bind(**context)
 
-            # Map standard logging levels to loguru
             if isinstance(level, int):
                 level_map = {
                     logging.DEBUG: "DEBUG",
@@ -329,7 +345,6 @@ class PGMQLogger:
 
             logger.log(level, message)
         else:
-            # Use standard logging
             if context:
                 context_str = " | ".join([f"{k}={v}" for k, v in context.items()])
                 message = f"{message} | {context_str}"
@@ -385,7 +400,6 @@ class PGMQLogger:
         )
 
 
-# Backward compatibility function
 def create_logger(
     name: str, verbose: bool = False, log_filename: Optional[str] = None
 ) -> Union[logging.Logger, Any]:
@@ -403,7 +417,6 @@ def create_logger(
     return PGMQLogger.get_logger(name=name, verbose=verbose, log_filename=log_filename)
 
 
-# Performance decorator for logging
 def log_performance(logger: Union[logging.Logger, Any]):
     """Decorator to log function performance."""
 
