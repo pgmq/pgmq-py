@@ -125,6 +125,7 @@ class PGMQLogger:
         name: str,
         verbose: bool = False,
         log_filename: Optional[str] = None,
+        log_format: Optional[str] = None,
         log_level: Optional[int] = None,
         enable_rotation: bool = False,
         max_bytes: int = 10 * 1024 * 1024,
