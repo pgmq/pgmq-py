@@ -22,7 +22,7 @@ except ImportError:
 class PGMQLogger:
     """
     Centralized logging manager for PGMQueue with dual backend support.
-    
+
     Provides a unified interface for both standard library logging and loguru,
     with automatic backend detection and backward compatibility with existing
     PGMQueue implementations.
@@ -31,7 +31,7 @@ class PGMQLogger:
     _loggers: Dict[str, Union[logging.Logger, Any]] = {}
     _configured: bool = False
     _use_loguru: bool = LOGURU_AVAILABLE
-    
+
     _handler_ids: Set[int] = set()
 
     @classmethod
@@ -52,7 +52,7 @@ class PGMQLogger:
     ) -> Union[logging.Logger, Any]:
         """
         Retrieve or create a configured logger instance.
-        
+
         Returns cached logger if name exists. Otherwise creates new logger
         using detected backend (loguru preferred if available).
 
@@ -109,7 +109,7 @@ class PGMQLogger:
         """Remove all handlers previously added by this class."""
         if not LOGURU_AVAILABLE or not cls._use_loguru:
             return
-            
+
         ids_to_remove = list(cls._handler_ids)
         for handler_id in ids_to_remove:
             try:
@@ -189,11 +189,11 @@ class PGMQLogger:
     ) -> Any:
         """
         Configure and return a loguru logger instance.
-        
+
         When verbose=False and no log_filename specified, returns a bound
         logger without adding handlers to avoid polluting host application logs.
         """
-        
+
         effective_level = "DEBUG" if verbose else "WARNING"
         if log_level is not None:
             if isinstance(log_level, int):
@@ -247,7 +247,7 @@ class PGMQLogger:
                 diagnose=True,
             )
             cls._handler_ids.add(file_id)
-        
+
         logger = loguru_logger.bind(logger=name)
         return logger
 
@@ -261,7 +261,7 @@ class PGMQLogger:
     ) -> None:
         """
         Apply global logging configuration across all PGMQ loggers.
-        
+
         Modifies class-level defaults and configures root handlers.
 
         Args:
@@ -314,7 +314,9 @@ class PGMQLogger:
 
             formatter = logging.Formatter(log_format)
 
-            if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+            if not any(
+                isinstance(h, logging.StreamHandler) for h in root_logger.handlers
+            ):
                 console_handler = logging.StreamHandler()
                 console_handler.setFormatter(formatter)
                 root_logger.addHandler(console_handler)
@@ -329,7 +331,7 @@ class PGMQLogger:
     ) -> None:
         """
         Emit a log entry with structured context data.
-        
+
         Automatically adapts output format for active backend.
 
         Args:
@@ -414,7 +416,7 @@ def create_logger(
 ) -> Union[logging.Logger, Any]:
     """
     Factory function for backward-compatible logger creation.
-    
+
     Simplified interface matching legacy PGMQueue API.
 
     Args:
@@ -431,7 +433,7 @@ def create_logger(
 def log_performance(logger: Union[logging.Logger, Any]):
     """
     Decorator factory for function execution timing.
-    
+
     Captures elapsed time and success/failure status.
     Supports both synchronous and asynchronous functions.
     """
