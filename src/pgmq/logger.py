@@ -1,4 +1,4 @@
-# src/pgmq/logger.py 
+# src/pgmq/logger.py
 
 import logging
 import logging.handlers
@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, Any, Union, Set
 
+# Attempt to import loguru; fall back to standard logging if unavailable
 try:
     from loguru import logger as loguru_logger
 
@@ -20,9 +21,11 @@ except ImportError:
 
 class PGMQLogger:
     """
-    Centralized logger for PGMQueue with enhanced features.
-    Backward compatible with existing PGMQueue implementation.
-    Supports both standard logging and loguru (if installed).
+    Centralized logging manager for PGMQueue with dual backend support.
+    
+    Provides a unified interface for both standard library logging and loguru,
+    with automatic backend detection and backward compatibility with existing
+    PGMQueue implementations.
     """
 
     _loggers: Dict[str, Union[logging.Logger, Any]] = {}
@@ -48,24 +51,27 @@ class PGMQLogger:
         compression: Optional[str] = None,
     ) -> Union[logging.Logger, Any]:
         """
-        Get or create a logger with the specified configuration.
+        Retrieve or create a configured logger instance.
+        
+        Returns cached logger if name exists. Otherwise creates new logger
+        using detected backend (loguru preferred if available).
 
         Args:
-            name: Logger name
-            verbose: Enable debug logging
-            log_filename: Log file path (auto-generated if None and verbose is True)
-            log_format: Custom log format string
-            log_level: Override log level
-            enable_rotation: Enable log rotation (standard logging only)
-            max_bytes: Maximum bytes before rotation (standard logging only)
-            backup_count: Number of backup files to keep (standard logging only)
-            structured: Enable structured JSON logging
-            rotation: Log rotation setting (loguru only, e.g., "10 MB", "1 day")
-            retention: Log retention setting (loguru only, e.g., "1 week")
-            compression: Compression setting (loguru only, e.g., "gz")
+            name: Unique identifier for the logger instance.
+            verbose: Enable DEBUG level output; defaults to WARNING.
+            log_filename: Path for file output; auto-generated if verbose=True.
+            log_format: Override default message format string.
+            log_level: Explicit level override (int for stdlib, str for loguru).
+            enable_rotation: Activate RotatingFileHandler (stdlib only).
+            max_bytes: Rotation trigger size in bytes (stdlib only).
+            backup_count: Number of archived log files to retain (stdlib only).
+            structured: Output JSON format instead of plain text.
+            rotation: Rotation policy expression (loguru only, e.g., "10 MB").
+            retention: Archive cleanup policy (loguru only, e.g., "1 week").
+            compression: Archive compression format (loguru only, e.g., "gz").
 
         Returns:
-            Configured logger instance (either logging.Logger or loguru logger)
+            Configured logger compatible with the active backend.
         """
         if name in cls._loggers:
             return cls._loggers[name]
@@ -100,7 +106,7 @@ class PGMQLogger:
 
     @classmethod
     def _remove_pgmq_handlers(cls):
-        """Safely remove only handlers added by PGMQ."""
+        """Remove all handlers previously added by this class."""
         if not LOGURU_AVAILABLE or not cls._use_loguru:
             return
             
@@ -110,6 +116,7 @@ class PGMQLogger:
                 loguru_logger.remove(handler_id)
                 cls._handler_ids.discard(handler_id)
             except Exception:
+                # Handler already removed or invalid; clean up tracking set
                 cls._handler_ids.discard(handler_id)
 
     @classmethod
@@ -118,14 +125,13 @@ class PGMQLogger:
         name: str,
         verbose: bool = False,
         log_filename: Optional[str] = None,
-        log_format: Optional[str] = None,
         log_level: Optional[int] = None,
         enable_rotation: bool = False,
         max_bytes: int = 10 * 1024 * 1024,
         backup_count: int = 5,
         structured: bool = False,
     ) -> logging.Logger:
-        """Get a standard Python logging logger."""
+        """Configure and return a standard library Logger instance."""
         logger = logging.getLogger(name)
 
         if logger.handlers:
@@ -182,10 +188,10 @@ class PGMQLogger:
         compression: Optional[str] = None,
     ) -> Any:
         """
-        Get a loguru logger.
+        Configure and return a loguru logger instance.
         
-        When verbose=False and no log_filename, returns a bound logger without
-        adding any handlers to avoid interfering with host application logging.
+        When verbose=False and no log_filename specified, returns a bound
+        logger without adding handlers to avoid polluting host application logs.
         """
         
         effective_level = "DEBUG" if verbose else "WARNING"
@@ -206,8 +212,7 @@ class PGMQLogger:
             if structured:
                 log_format = '{{"timestamp": "{time:YYYY-MM-DD HH:mm:ss.SSS}", "level": "{level}", "logger": "{extra[logger]}", "message": "{message}"}}'
             else:
-                # Removed {extra[logger]} from default format to prevent KeyError 
-                # if host application logs without binding context
+                # Omit {extra[logger]} to prevent KeyError when host app logs without context
                 log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 
         needs_custom_handler = bool(verbose or log_filename)
@@ -255,13 +260,15 @@ class PGMQLogger:
         use_loguru: Optional[bool] = None,
     ) -> None:
         """
-        Configure global logging settings for all PGMQ loggers.
+        Apply global logging configuration across all PGMQ loggers.
+        
+        Modifies class-level defaults and configures root handlers.
 
         Args:
-            log_level: Default log level
-            log_format: Default log format
-            structured: Enable structured JSON logging
-            use_loguru: Force use of loguru (None = auto-detect)
+            log_level: Default severity threshold for all loggers.
+            log_format: Default output format template.
+            structured: Enable JSON output for all loggers.
+            use_loguru: Force specific backend (None enables auto-detection).
         """
         cls._configured = True
 
@@ -321,13 +328,15 @@ class PGMQLogger:
         **context,
     ) -> None:
         """
-        Log a message with additional context.
+        Emit a log entry with structured context data.
+        
+        Automatically adapts output format for active backend.
 
         Args:
-            logger: Logger instance
-            level: Log level
-            message: Log message
-            **context: Additional context data
+            logger: Target logger instance.
+            level: Severity level (int for stdlib, str for loguru).
+            message: Primary log message content.
+            **context: Key-value pairs to include in log output.
         """
         if cls._use_loguru:
             if context:
@@ -355,7 +364,7 @@ class PGMQLogger:
     def log_transaction_start(
         cls, logger: Union[logging.Logger, Any], func_name: str, **context
     ):
-        """Log the start of a transaction."""
+        """Record transaction initiation event."""
         cls.log_with_context(
             logger,
             logging.DEBUG,
@@ -369,7 +378,7 @@ class PGMQLogger:
     def log_transaction_success(
         cls, logger: Union[logging.Logger, Any], func_name: str, **context
     ):
-        """Log successful transaction completion."""
+        """Record transaction completion event."""
         cls.log_with_context(
             logger,
             logging.DEBUG,
@@ -387,7 +396,7 @@ class PGMQLogger:
         error: Exception,
         **context,
     ):
-        """Log transaction error and rollback."""
+        """Record transaction failure and rollback event."""
         cls.log_with_context(
             logger,
             logging.ERROR,
@@ -404,21 +413,28 @@ def create_logger(
     name: str, verbose: bool = False, log_filename: Optional[str] = None
 ) -> Union[logging.Logger, Any]:
     """
-    Create a logger with backward-compatible interface.
+    Factory function for backward-compatible logger creation.
+    
+    Simplified interface matching legacy PGMQueue API.
 
     Args:
-        name: Logger name
-        verbose: Enable debug logging
-        log_filename: Log file path
+        name: Logger identifier.
+        verbose: Enable debug output.
+        log_filename: Optional file output path.
 
     Returns:
-        Configured logger instance
+        Configured logger instance.
     """
     return PGMQLogger.get_logger(name=name, verbose=verbose, log_filename=log_filename)
 
 
 def log_performance(logger: Union[logging.Logger, Any]):
-    """Decorator to log function performance."""
+    """
+    Decorator factory for function execution timing.
+    
+    Captures elapsed time and success/failure status.
+    Supports both synchronous and asynchronous functions.
+    """
 
     def decorator(func):
         @functools.wraps(func)
