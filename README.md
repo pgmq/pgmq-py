@@ -23,7 +23,7 @@ Dependencies:
 ### Start a Postgres Instance with the PGMQ extension installed
 
 ```bash
-docker run -d --name pgmq-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 ghcr.io/pgmq/pg17-pgmq:v1.5.1
+docker run -d --name pgmq-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 ghcr.io/pgmq/pg18-pgmq:v1.10.0
 ```
 
 ### Using Environment Variables
