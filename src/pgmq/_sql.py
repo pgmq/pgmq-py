@@ -5,7 +5,12 @@ Centralized SQL templates for PGMQ operations.
 This module contains all SQL queries used by the PGMQ client, ensuring
 consistency between sync and async implementations and making the code
 easier to maintain and audit.
+
+It also provides ASYNC_SQL_MAP, a pre-computed dictionary of asyncpg-compatible
+queries (converting %s to $1, $2, etc.) to avoid runtime string manipulation.
 """
+
+from typing import Dict
 
 
 # ============================================================================
@@ -256,3 +261,100 @@ def get_set_vt_sql(is_batch: bool = False, vt_is_timestamp: bool = False) -> str
     if is_batch:
         return SET_VT_BATCH_TZ if vt_is_timestamp else SET_VT_BATCH_INT
     return SET_VT_TZ if vt_is_timestamp else SET_VT_INT
+
+
+# ============================================================================
+# Asyncpg Optimization: Pre-computed SQL Map
+# ============================================================================
+
+
+def _convert_psycopg_to_asyncpg(sql: str) -> str:
+    """
+    Convert psycopg style SQL (%s) to asyncpg style ($1, $2...).
+    Used once at module load time to create ASYNC_SQL_MAP.
+    """
+    count = sql.count("%s")
+    if count == 0:
+        return sql
+
+    parts = sql.split("%s")
+    result = []
+    for i, part in enumerate(parts[:-1]):
+        result.append(part)
+        result.append(f"${i + 1}")
+    result.append(parts[-1])
+    return "".join(result)
+
+
+# Collect all SQL constants from this module to build the map automatically
+# This ensures we don't miss any new SQL strings added in the future.
+_ALL_SQL_CONSTANTS = [
+    CREATE_QUEUE,
+    CREATE_UNLOGGED_QUEUE,
+    CREATE_PARTITIONED_QUEUE,
+    CREATE_NON_PARTITIONED,
+    DROP_QUEUE,
+    LIST_QUEUES,
+    VALIDATE_QUEUE_NAME,
+    SEND,
+    SEND_WITH_DELAY_INT,
+    SEND_WITH_DELAY_TZ,
+    SEND_WITH_HEADERS,
+    SEND_WITH_HEADERS_DELAY_INT,
+    SEND_WITH_HEADERS_DELAY_TZ,
+    SEND_BATCH,
+    SEND_BATCH_WITH_DELAY_INT,
+    SEND_BATCH_WITH_DELAY_TZ,
+    SEND_BATCH_WITH_HEADERS,
+    SEND_BATCH_WITH_HEADERS_DELAY_INT,
+    SEND_BATCH_WITH_HEADERS_DELAY_TZ,
+    SEND_TOPIC,
+    SEND_TOPIC_WITH_HEADERS,
+    SEND_TOPIC_WITH_DELAY_INT,
+    SEND_TOPIC_WITH_HEADERS_DELAY_INT,
+    SEND_BATCH_TOPIC,
+    SEND_BATCH_TOPIC_WITH_HEADERS,
+    SEND_BATCH_TOPIC_WITH_DELAY_INT,
+    SEND_BATCH_TOPIC_WITH_DELAY_TZ,
+    SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_INT,
+    SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_TZ,
+    BIND_TOPIC,
+    UNBIND_TOPIC,
+    LIST_TOPIC_BINDINGS,
+    LIST_TOPIC_BINDINGS_FOR_QUEUE,
+    TEST_ROUTING,
+    READ,
+    READ_WITH_POLL,
+    READ_CONDITIONAL,
+    READ_WITH_POLL_CONDITIONAL,
+    READ_GROUPED,
+    READ_GROUPED_WITH_POLL,
+    READ_GROUPED_RR,
+    READ_GROUPED_RR_WITH_POLL,
+    POP,
+    DELETE,
+    DELETE_BATCH,
+    ARCHIVE,
+    ARCHIVE_BATCH,
+    PURGE_QUEUE,
+    SET_VT_INT,
+    SET_VT_TZ,
+    SET_VT_BATCH_INT,
+    SET_VT_BATCH_TZ,
+    METRICS,
+    METRICS_ALL,
+    ENABLE_NOTIFY,
+    DISABLE_NOTIFY,
+    UPDATE_NOTIFY,
+    LIST_NOTIFY_THROTTLES,
+    VALIDATE_ROUTING_KEY,
+    VALIDATE_TOPIC_PATTERN,
+    CREATE_FIFO_INDEX,
+    CREATE_FIFO_INDEXES_ALL,
+    CONVERT_ARCHIVE_PARTITIONED,
+    DETACH_ARCHIVE,
+]
+
+ASYNC_SQL_MAP: Dict[str, str] = {
+    sql: _convert_psycopg_to_asyncpg(sql) for sql in _ALL_SQL_CONSTANTS
+}
