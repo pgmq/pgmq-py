@@ -19,4 +19,4 @@ run-pgmq-postgres:
 
 test: clear-postgres run-pgmq-postgres
 	sleep 10  # Give PostgreSQL time to start
-	uv run python -m unittest discover tests
+	uv run python -m unittest discover -s tests -p "test_*.py"
