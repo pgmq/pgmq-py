@@ -8,22 +8,48 @@ extension, ensuring type safety and IDE autocomplete support.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, Mapping, Union
+
+
+def _get_value(
+    row: Union[tuple, Mapping], key: str, index: Optional[int] = None
+) -> Any:
+    """
+    Safely get a value from a row by name (preferred) or index (fallback).
+
+    This allows us to switch from brittle index-based access to robust
+    name-based access while maintaining backward compatibility with raw tuples.
+    """
+    if isinstance(row, Mapping):
+        # Try exact key match first (psycopg/asyncpg usually return lowercase keys)
+        if key in row:
+            return row[key]
+        # Fallback for potential capitalization issues (e.g. 'Queue_name')
+        # Though PGMQ standard is lowercase snake_case
+        for k in row.keys():
+            if k.lower() == key.lower():
+                return row[k]
+
+    # Fallback to index if provided and row is a sequence (tuple/list)
+    if (
+        index is not None
+        and hasattr(row, "__getitem__")
+        and not isinstance(row, Mapping)
+    ):
+        try:
+            return row[index]
+        except IndexError:
+            pass
+
+    raise KeyError(
+        f"Could not find column '{key}' in row. Row type: {type(row)}, Content: {row}"
+    )
 
 
 @dataclass
 class Message:
     """
     Complete message record matching pgmq.message_record type.
-
-    Attributes:
-        msg_id: Unique ID of the message
-        read_ct: Number of times the message has been read
-        enqueued_at: Timestamp when the message was inserted
-        last_read_at: Timestamp when the message was last read (None if never read)
-        vt: Timestamp when the message will become available for reading
-        message: The message payload as a dictionary
-        headers: Optional message headers/metadata
     """
 
     msg_id: int
@@ -36,32 +62,27 @@ class Message:
 
     @classmethod
     def from_row(
-        cls, row: tuple, json_parser: Optional[Callable[[Any], Dict[str, Any]]] = None
+        cls,
+        row: Union[tuple, Mapping],
+        json_parser: Optional[Callable[[Any], Dict[str, Any]]] = None,
     ) -> "Message":
-        """
-        Factory method to create Message from a database row tuple.
-
-        Args:
-            row: Database result row (msg_id, read_ct, enqueued_at, last_read_at,
-                vt, message, headers)
-            json_parser: Optional function to parse JSONB. If None, assumes
-                        already parsed (for psycopg) or uses identity.
-        """
-
         def _identity(x: Any) -> Any:
             return x
 
         if json_parser is None:
             json_parser = _identity
 
+        # Using names makes this resilient to SQL column reordering
         return cls(
-            msg_id=row[0],
-            read_ct=row[1],
-            enqueued_at=row[2],
-            last_read_at=row[3],
-            vt=row[4],
-            message=json_parser(row[5]),
-            headers=json_parser(row[6]) if row[6] is not None else None,
+            msg_id=_get_value(row, "msg_id", 0),
+            read_ct=_get_value(row, "read_ct", 1),
+            enqueued_at=_get_value(row, "enqueued_at", 2),
+            last_read_at=_get_value(row, "last_read_at", 3),
+            vt=_get_value(row, "vt", 4),
+            message=json_parser(_get_value(row, "message", 5)),
+            headers=json_parser(_get_value(row, "headers", 6))
+            if _get_value(row, "headers", 6) is not None
+            else None,
         )
 
     def __repr__(self) -> str:
@@ -76,12 +97,6 @@ class Message:
 class QueueRecord:
     """
     Queue metadata matching pgmq.queue_record type.
-
-    Attributes:
-        queue_name: Name of the queue
-        is_partitioned: Whether the queue uses table partitioning
-        is_unlogged: Whether the queue uses unlogged tables (faster but not crash-safe)
-        created_at: When the queue was created
     """
 
     queue_name: str
@@ -90,16 +105,15 @@ class QueueRecord:
     created_at: datetime
 
     @classmethod
-    def from_row(cls, row: tuple) -> "QueueRecord":
+    def from_row(cls, row: Union[tuple, Mapping]) -> "QueueRecord":
         return cls(
-            queue_name=row[0],
-            created_at=row[1],
-            is_partitioned=row[2],
-            is_unlogged=row[3],
+            queue_name=_get_value(row, "queue_name", 0),
+            created_at=_get_value(row, "created_at", 1),
+            is_partitioned=_get_value(row, "is_partitioned", 2),
+            is_unlogged=_get_value(row, "is_unlogged", 3),
         )
 
     def __str__(self) -> str:
-        """Return queue name for backward compatibility printing."""
         return self.queue_name
 
 
@@ -107,15 +121,6 @@ class QueueRecord:
 class QueueMetrics:
     """
     Queue statistics matching pgmq.metrics_result type.
-
-    Attributes:
-        queue_name: Name of the queue
-        queue_length: Total messages currently in queue
-        newest_msg_age_sec: Age of newest message in seconds (None if empty)
-        oldest_msg_age_sec: Age of oldest message in seconds (None if empty)
-        total_messages: Total messages ever processed through this queue
-        scrape_time: When these metrics were collected
-        queue_visible_length: Number of messages currently visible (vt <= now)
     """
 
     queue_name: str
@@ -127,22 +132,29 @@ class QueueMetrics:
     queue_visible_length: int
 
     @classmethod
-    def from_row(cls, row: tuple) -> "QueueMetrics":
-        """Create QueueMetrics from database row."""
+    def from_row(cls, row: Union[tuple, Mapping]) -> "QueueMetrics":
         # Handle both old (6 columns) and new (7 columns) schema versions
-        if len(row) >= 7:
-            visible_length = row[6]
+        # We check length only if it's a sequence, otherwise rely on key existence
+        has_visible_length = False
+        if not isinstance(row, Mapping):
+            has_visible_length = len(row) >= 7
         else:
-            visible_length = row[1]  # Fallback to queue_length for older versions
+            has_visible_length = "queue_visible_length" in row
+
+        visible_length_val = (
+            _get_value(row, "queue_visible_length", 6)
+            if has_visible_length
+            else _get_value(row, "queue_length", 1)
+        )
 
         return cls(
-            queue_name=row[0],
-            queue_length=row[1],
-            newest_msg_age_sec=row[2],
-            oldest_msg_age_sec=row[3],
-            total_messages=row[4],
-            scrape_time=row[5],
-            queue_visible_length=visible_length,
+            queue_name=_get_value(row, "queue_name", 0),
+            queue_length=_get_value(row, "queue_length", 1),
+            newest_msg_age_sec=_get_value(row, "newest_msg_age_sec", 2),
+            oldest_msg_age_sec=_get_value(row, "oldest_msg_age_sec", 3),
+            total_messages=_get_value(row, "total_messages", 4),
+            scrape_time=_get_value(row, "scrape_time", 5),
+            queue_visible_length=visible_length_val,
         )
 
 
@@ -150,12 +162,6 @@ class QueueMetrics:
 class TopicBinding:
     """
     Topic routing binding record.
-
-    Attributes:
-        pattern: The wildcard pattern (e.g., 'logs.*.error')
-        queue_name: Queue that receives matching messages
-        bound_at: When this binding was created
-        compiled_regex: Internal regex used for matching
     """
 
     pattern: str
@@ -164,13 +170,12 @@ class TopicBinding:
     compiled_regex: str
 
     @classmethod
-    def from_row(cls, row: tuple) -> "TopicBinding":
-        """Create TopicBinding from database row."""
+    def from_row(cls, row: Union[tuple, Mapping]) -> "TopicBinding":
         return cls(
-            pattern=row[0],
-            queue_name=row[1],
-            bound_at=row[2],
-            compiled_regex=row[3],
+            pattern=_get_value(row, "pattern", 0),
+            queue_name=_get_value(row, "queue_name", 1),
+            bound_at=_get_value(row, "bound_at", 2),
+            compiled_regex=_get_value(row, "compiled_regex", 3),
         )
 
 
@@ -178,8 +183,6 @@ class TopicBinding:
 class RoutingResult:
     """
     Result from test_routing function.
-
-    Shows which queues would receive a message with a given routing key.
     """
 
     pattern: str
@@ -187,12 +190,11 @@ class RoutingResult:
     compiled_regex: str
 
     @classmethod
-    def from_row(cls, row: tuple) -> "RoutingResult":
-        """Create RoutingResult from database row."""
+    def from_row(cls, row: Union[tuple, Mapping]) -> "RoutingResult":
         return cls(
-            pattern=row[0],
-            queue_name=row[1],
-            compiled_regex=row[2],
+            pattern=_get_value(row, "pattern", 0),
+            queue_name=_get_value(row, "queue_name", 1),
+            compiled_regex=_get_value(row, "compiled_regex", 2),
         )
 
 
@@ -200,19 +202,16 @@ class RoutingResult:
 class BatchTopicResult:
     """
     Result from send_batch_topic function.
-
-    Maps which queue received which message ID.
     """
 
     queue_name: str
     msg_id: int
 
     @classmethod
-    def from_row(cls, row: tuple) -> "BatchTopicResult":
-        """Create BatchTopicResult from database row."""
+    def from_row(cls, row: Union[tuple, Mapping]) -> "BatchTopicResult":
         return cls(
-            queue_name=row[0],
-            msg_id=row[1],
+            queue_name=_get_value(row, "queue_name", 0),
+            msg_id=_get_value(row, "msg_id", 1),
         )
 
 
@@ -220,11 +219,6 @@ class BatchTopicResult:
 class NotificationThrottle:
     """
     Notification throttle configuration.
-
-    Attributes:
-        queue_name: Queue with notifications enabled
-        throttle_interval_ms: Minimum milliseconds between notifications
-        last_notified_at: Timestamp of last notification (epoch if never)
     """
 
     queue_name: str
@@ -232,10 +226,9 @@ class NotificationThrottle:
     last_notified_at: datetime
 
     @classmethod
-    def from_row(cls, row: tuple) -> "NotificationThrottle":
-        """Create NotificationThrottle from database row."""
+    def from_row(cls, row: Union[tuple, Mapping]) -> "NotificationThrottle":
         return cls(
-            queue_name=row[0],
-            throttle_interval_ms=row[1],
-            last_notified_at=row[2],
+            queue_name=_get_value(row, "queue_name", 0),
+            throttle_interval_ms=_get_value(row, "throttle_interval_ms", 1),
+            last_notified_at=_get_value(row, "last_notified_at", 2),
         )
