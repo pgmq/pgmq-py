@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, Union, Set
 
 # Attempt to import loguru; fall back to standard logging if unavailable
 try:
-    from loguru import logger as loguru_logger
+    from loguru import logger as loguru_logger  # type: ignore
 
     LOGURU_AVAILABLE = True
 except ImportError:
@@ -284,7 +284,9 @@ class LoggingManager:
             ):
                 console_handler = logging.StreamHandler()
                 console_handler = logging.StreamHandler()
-                formatter = logging.Formatter(log_format or "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+                formatter = logging.Formatter(
+                    log_format or "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
                 console_handler.setFormatter(formatter)
                 root_logger.addHandler(console_handler)
 
