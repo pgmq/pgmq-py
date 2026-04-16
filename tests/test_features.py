@@ -1,5 +1,5 @@
 from psycopg.errors import UndefinedFunction, RaiseException, NullValueNotAllowed
-from .utils import PGMQTestCase
+from tests.utils import PGMQTestCase
 
 
 class TestPartitioning(PGMQTestCase):

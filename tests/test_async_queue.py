@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from pgmq.async_queue import PGMQueue as AsyncPGMQueue
 from pgmq.decorators import async_transaction
-from .utils import PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
+from tests.utils import PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
 
 
 class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):

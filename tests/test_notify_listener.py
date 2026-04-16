@@ -7,7 +7,7 @@ from psycopg.errors import UndefinedFunction
 from pgmq import PGMQueue
 from pgmq.async_queue import PGMQueue as AsyncPGMQueue
 from pgmq.notify_listener import SyncNotificationListener, AsyncNotificationListener
-from .utils import PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
+from tests.utils import PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
 
 
 class TestSyncNotificationListener(unittest.TestCase):

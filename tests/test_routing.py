@@ -1,5 +1,5 @@
 from psycopg.errors import UndefinedFunction
-from .utils import PGMQTestCase
+from tests.utils import PGMQTestCase
 
 
 class TestTopicRouting(PGMQTestCase):

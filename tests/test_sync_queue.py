@@ -4,7 +4,14 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
 from pgmq import Message, PGMQueue
 from pgmq.decorators import transaction
-from .utils import PGMQTestCase, PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
+from tests.utils import (
+    PGMQTestCase,
+    PG_HOST,
+    PG_PORT,
+    PG_DATABASE,
+    PG_USERNAME,
+    PG_PASSWORD,
+)
 
 
 class TestSyncQueue(PGMQTestCase):
