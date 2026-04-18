@@ -17,13 +17,13 @@ from typing import Dict
 # Queue Management
 # ============================================================================
 
-CREATE_QUEUE = "SELECT pgmq.create(%s);"
-CREATE_UNLOGGED_QUEUE = "SELECT pgmq.create_unlogged(%s);"
-CREATE_PARTITIONED_QUEUE = "SELECT pgmq.create_partitioned(%s, %s::text, %s::text);"
-CREATE_NON_PARTITIONED = "SELECT pgmq.create_non_partitioned(%s);"
-DROP_QUEUE = "SELECT pgmq.drop_queue(%s);"
+CREATE_QUEUE = "SELECT pgmq.create(queue_name=>%s);"
+CREATE_UNLOGGED_QUEUE = "SELECT pgmq.create_unlogged(queue_name=>%s);"
+CREATE_PARTITIONED_QUEUE = "SELECT pgmq.create_partitioned(queue_name=>%s, partition_interval=>%s, retention_interval=>%s);"
+CREATE_NON_PARTITIONED = "SELECT pgmq.create_non_partitioned(queue_name=>%s);"
+DROP_QUEUE = "SELECT pgmq.drop_queue(queue_name=>%s);"
 LIST_QUEUES = "SELECT queue_name, created_at, is_partitioned, is_unlogged FROM pgmq.list_queues();"
-VALIDATE_QUEUE_NAME = "SELECT pgmq.validate_queue_name(%s);"
+VALIDATE_QUEUE_NAME = "SELECT pgmq.validate_queue_name(queue_name=>%s);"
 
 # ============================================================================
 # Sending Messages
@@ -51,31 +51,30 @@ SEND_BATCH_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch(queue_name=>%s
 # Topic-Based Routing
 # ============================================================================
 
-SEND_TOPIC = "SELECT pgmq.send_topic(%s::text, %s::jsonb);"
-SEND_TOPIC_WITH_HEADERS = "SELECT pgmq.send_topic(%s::text, %s::jsonb, %s::jsonb);"
-SEND_TOPIC_WITH_DELAY_INT = "SELECT pgmq.send_topic(%s::text, %s::jsonb, %s::integer);"
-SEND_TOPIC_WITH_HEADERS_DELAY_INT = (
-    "SELECT pgmq.send_topic(%s::text, %s::jsonb, %s::jsonb, %s::integer);"
+SEND_TOPIC = "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb);"
+SEND_TOPIC_WITH_HEADERS = (
+    "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb);"
 )
+SEND_TOPIC_WITH_DELAY_INT = (
+    "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, delay=>%s::integer);"
+)
+SEND_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb, delay=>%s::integer);"
 
-SEND_BATCH_TOPIC = "SELECT * FROM pgmq.send_batch_topic(%s::text, %s::jsonb[]);"
-SEND_BATCH_TOPIC_WITH_HEADERS = (
-    "SELECT * FROM pgmq.send_batch_topic(%s::text, %s::jsonb[], %s::jsonb[]);"
+SEND_BATCH_TOPIC = (
+    "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[]);"
 )
-SEND_BATCH_TOPIC_WITH_DELAY_INT = (
-    "SELECT * FROM pgmq.send_batch_topic(%s::text, %s::jsonb[], %s::integer);"
-)
-SEND_BATCH_TOPIC_WITH_DELAY_TZ = (
-    "SELECT * FROM pgmq.send_batch_topic(%s::text, %s::jsonb[], %s::timestamptz);"
-)
-SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(%s::text, %s::jsonb[], %s::jsonb[], %s::integer);"
-SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(%s::text, %s::jsonb[], %s::jsonb[], %s::timestamptz);"
+SEND_BATCH_TOPIC_WITH_HEADERS = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[]);"
+SEND_BATCH_TOPIC_WITH_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], delay=>%s::integer);"
+SEND_BATCH_TOPIC_WITH_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], delay=>%s::timestamptz);"
+SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::integer);"
+SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::timestamptz);"
 
-BIND_TOPIC = "SELECT pgmq.bind_topic(%s::text, %s::text);"
-UNBIND_TOPIC = "SELECT pgmq.unbind_topic(%s::text, %s::text);"
+# Note: Preserving logical mapping from Python (pattern, queue_name) to PGMQ (queue_name, pattern)
+BIND_TOPIC = "SELECT pgmq.bind_topic(queue_name=>%s, pattern=>%s);"
+UNBIND_TOPIC = "SELECT pgmq.unbind_topic(queue_name=>%s, pattern=>%s);"
 LIST_TOPIC_BINDINGS = "SELECT pattern, queue_name, bound_at, compiled_regex FROM pgmq.list_topic_bindings();"
-LIST_TOPIC_BINDINGS_FOR_QUEUE = "SELECT pattern, queue_name, bound_at, compiled_regex FROM pgmq.list_topic_bindings(%s);"
-TEST_ROUTING = "SELECT pattern, queue_name, compiled_regex FROM pgmq.test_routing(%s);"
+LIST_TOPIC_BINDINGS_FOR_QUEUE = "SELECT pattern, queue_name, bound_at, compiled_regex FROM pgmq.list_topic_bindings(queue_name=>%s);"
+TEST_ROUTING = "SELECT pattern, queue_name, compiled_regex FROM pgmq.test_routing(routing_key=>%s);"
 
 # ============================================================================
 # Reading Messages
@@ -160,21 +159,21 @@ METRICS_ALL = "SELECT * FROM pgmq.metrics_all();"
 # Notifications
 # ============================================================================
 
-ENABLE_NOTIFY = "SELECT pgmq.enable_notify_insert(%s::text, %s::integer);"
-DISABLE_NOTIFY = "SELECT pgmq.disable_notify_insert(%s::text);"
-UPDATE_NOTIFY = "SELECT pgmq.update_notify_insert(%s::text, %s::integer);"
+ENABLE_NOTIFY = "SELECT pgmq.enable_notify_insert(queue_name=>%s::text, throttle_interval_ms=>%s::integer);"
+DISABLE_NOTIFY = "SELECT pgmq.disable_notify_insert(queue_name=>%s::text);"
+UPDATE_NOTIFY = "SELECT pgmq.update_notify_insert(queue_name=>%s::text, throttle_interval_ms=>%s::integer);"
 LIST_NOTIFY_THROTTLES = "SELECT queue_name, throttle_interval_ms, last_notified_at FROM pgmq.list_notify_insert_throttles();"
 
 # ============================================================================
 # Utilities
 # ============================================================================
 
-VALIDATE_ROUTING_KEY = "SELECT pgmq.validate_routing_key(%s);"
-VALIDATE_TOPIC_PATTERN = "SELECT pgmq.validate_topic_pattern(%s);"
-CREATE_FIFO_INDEX = "SELECT pgmq.create_fifo_index(%s);"
+VALIDATE_ROUTING_KEY = "SELECT pgmq.validate_routing_key(routing_key=>%s);"
+VALIDATE_TOPIC_PATTERN = "SELECT pgmq.validate_topic_pattern(pattern=>%s);"
+CREATE_FIFO_INDEX = "SELECT pgmq.create_fifo_index(queue_name=>%s);"
 CREATE_FIFO_INDEXES_ALL = "SELECT pgmq.create_fifo_indexes_all();"
-CONVERT_ARCHIVE_PARTITIONED = "SELECT pgmq.convert_archive_partitioned(%s, %s, %s, %s);"
-DETACH_ARCHIVE = "SELECT pgmq.detach_archive(%s);"
+CONVERT_ARCHIVE_PARTITIONED = "SELECT pgmq.convert_archive_partitioned(queue_name=>%s, partition_interval=>%s, retention_interval=>%s, leading_partition=>%s);"
+DETACH_ARCHIVE = "SELECT pgmq.detach_archive(queue_name=>%s);"
 
 
 def get_send_sql(
