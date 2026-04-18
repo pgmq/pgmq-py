@@ -1,9 +1,10 @@
+# tests/utils.py
 import os
 import unittest
 import uuid
 from pgmq import PGMQueue
 
-# Configuration matches your docker-compose setup
+# Configuration matches docker-compose setup
 PG_HOST = os.getenv("PG_HOST", "localhost")
 PG_PORT = os.getenv("PG_PORT", "5432")
 PG_DATABASE = os.getenv("PG_DATABASE", "postgres")
