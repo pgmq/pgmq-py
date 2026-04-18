@@ -13,8 +13,7 @@ import os
 import logging
 import asyncpg
 from asyncpg import Pool
-import orjson  # Required for JSON serialization
-
+import orjson
 from pgmq.base import BaseQueue, PGMQConfig
 from pgmq import _sql
 from pgmq.decorators import async_transaction
@@ -48,6 +47,7 @@ class PGMQueue(BaseQueue):
     """
 
     # --- Backward Compatible Fields ---
+    conn_string: Optional[str] = None
     host: str = field(default_factory=lambda: os.getenv("PG_HOST", "localhost"))
     port: str = field(default_factory=lambda: os.getenv("PG_PORT", "5432"))
     database: str = field(default_factory=lambda: os.getenv("PG_DATABASE", "postgres"))

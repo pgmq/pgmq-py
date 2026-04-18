@@ -37,6 +37,7 @@ class PGMQueue(BaseQueue):
     """
 
     # --- Backward Compatible Fields ---
+    conn_string: Optional[str] = None
     host: str = field(default_factory=lambda: os.getenv("PG_HOST", "localhost"))
     port: str = field(default_factory=lambda: os.getenv("PG_PORT", "5432"))
     database: str = field(default_factory=lambda: os.getenv("PG_DATABASE", "postgres"))
