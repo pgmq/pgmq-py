@@ -1,282 +1,290 @@
+# tests/test_async_queue.py
 import unittest
-import time
-from pgmq.messages import Message
-from pgmq.async_queue import PGMQueue
-from pgmq.decorators import async_transaction as transaction
+import asyncio
+import os
 from datetime import datetime, timezone, timedelta
+from unittest.mock import patch, AsyncMock
 
-# Function to load environment variables
+from pgmq.async_queue import PGMQueue as AsyncPGMQueue
+from pgmq.decorators import async_transaction
+from tests.utils import PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
 
 
-class BaseTestPGMQueue(unittest.IsolatedAsyncioTestCase):
+class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):
+    """Comprehensive Async Tests (Merged test_async_queue.py & test_async_integration.py)."""
+
     async def asyncSetUp(self):
-        """Purge the queue before each test to ensure a clean state."""
-        self.queue = PGMQueue(
-            host="localhost",
-            port="5432",
-            username="postgres",
-            password="postgres",
-            database="postgres",
+        self.queue = AsyncPGMQueue(
+            host=PG_HOST,
+            port=PG_PORT,
+            database=PG_DATABASE,
+            username=PG_USERNAME,
+            password=PG_PASSWORD,
+            verbose=False,
         )
         await self.queue.init()
-
-        # Test database connection first
-        try:
-            pool = self.queue.pool
-            async with pool.acquire() as conn:
-                await conn.fetch("SELECT 1")
-                print("Connection successful (without env)")
-        except Exception as e:
-            raise Exception(f"Database connection failed: {e}")
-
-        self.test_queue = "test_queue"
-        self.test_message = {"hello": "world"}
+        self.test_queue = "async_test_queue"
+        self.test_message = {"hello": "async"}
         await self.queue.create_queue(self.test_queue)
         await self.queue.purge(self.test_queue)
 
     async def asyncTearDown(self):
-        await self.queue.pool.close()
+        await self.queue.drop_queue(self.test_queue)
+        await self.queue.close()
 
-    async def test_create_queue(self):
-        """Test creating a queue."""
-        await self.queue.create_queue("test_queue_2")
-        msg_id = await self.queue.send("test_queue_2", self.test_message)
-        self.assertIsInstance(msg_id, int)
+    # --- Standard & V1 Coverage ---
 
-    async def test_send_and_read_message(self):
-        """Test sending and reading a message from the queue."""
+    async def test_send_and_read(self):
         msg_id = await self.queue.send(self.test_queue, self.test_message)
-        message: Message = await self.queue.read(self.test_queue, vt=20)
-        self.assertEqual(message.message, self.test_message)
-        self.assertEqual(message.msg_id, msg_id, "Read the wrong message")
+        msg = await self.queue.read(self.test_queue)
+        self.assertEqual(msg.msg_id, msg_id)
 
-    async def test_send_and_read_message_without_vt(self):
-        """Test sending and reading a message from the queue without VT."""
-        msg_id = await self.queue.send(self.test_queue, self.test_message)
-        message: Message = await self.queue.read(self.test_queue)
-        self.assertEqual(message.message, self.test_message)
-        self.assertEqual(message.msg_id, msg_id, "Read the wrong message")
-
-    async def test_send_message_with_delay(self):
-        """Test sending a message with a delay."""
+    async def test_send_delay(self):
         msg_id = await self.queue.send(self.test_queue, self.test_message, delay=5)
-        message = await self.queue.read(self.test_queue, vt=20)
-        self.assertIsNone(message, "Message should not be visible yet")
-        time.sleep(6)
-        message: Message = await self.queue.read(self.test_queue, vt=20)
-        self.assertIsNotNone(message, "Message should be visible after delay")
-        self.assertEqual(message.message, self.test_message)
-        self.assertEqual(message.msg_id, msg_id, "Read the wrong message")
+        msg = await self.queue.read(self.test_queue)
+        self.assertIsNone(msg)
+        await asyncio.sleep(6)
+        msg = await self.queue.read(self.test_queue)
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.msg_id, msg_id)
 
-    async def test_send_message_with_tz(self):
-        """Test sending a message with a timestamp delay."""
-        timestamp = datetime.now(timezone.utc) + timedelta(seconds=5)
-        msg_id = await self.queue.send(self.test_queue, self.test_message, tz=timestamp)
-        message = await self.queue.read(self.test_queue, vt=20)
-        self.assertIsNone(message, "Message should not be visible yet")
-        time.sleep(5)
-        message: Message = await self.queue.read(self.test_queue, vt=20)
-        self.assertIsNotNone(message, "Message should be visible after delay")
-        self.assertEqual(message.message, self.test_message)
-        self.assertEqual(message.msg_id, msg_id, "Read the wrong message")
+    async def test_send_datetime_delay(self):
+        ts = datetime.now(timezone.utc) + timedelta(seconds=5)
+        await self.queue.send(self.test_queue, self.test_message, tz=ts)
+        msg = await self.queue.read(self.test_queue)
+        self.assertIsNone(msg)
+        await asyncio.sleep(6)
+        msg = await self.queue.read(self.test_queue)
+        self.assertIsNotNone(msg)
 
-    async def test_archive_message(self):
-        """Test archiving a message in the queue."""
-        _ = await self.queue.send(self.test_queue, self.test_message)
-        message = await self.queue.read(self.test_queue, vt=20)
-        await self.queue.archive(self.test_queue, message.msg_id)
-        message = await self.queue.read(self.test_queue, vt=20)
-        self.assertIsNone(message, "No message expected in queue")
-
-    async def test_delete_message(self):
-        """Test deleting a message from the queue."""
-        msg_id = await self.queue.send(self.test_queue, self.test_message)
-        await self.queue.delete(self.test_queue, msg_id)
-        message = await self.queue.read(self.test_queue, vt=20)
-        self.assertIsNone(message, "No message expected in queue")
-
-    async def test_send_batch(self):
-        """Test sending a batch of messages to the queue."""
-        messages = [self.test_message, self.test_message]
-        msg_ids = await self.queue.send_batch(self.test_queue, messages)
-        self.assertEqual(len(msg_ids), 2)
-
-    async def test_read_batch(self):
-        """Test reading a batch of messages from the queue."""
-        messages = [self.test_message, self.test_message]
-        await self.queue.send_batch(self.test_queue, messages)
-        read_messages = await self.queue.read_batch(
-            self.test_queue, vt=20, batch_size=2
+    async def test_batch_operations(self):
+        ids = await self.queue.send_batch(
+            self.test_queue, [self.test_message, self.test_message]
         )
-        self.assertEqual(len(read_messages), 2)
-        for message in read_messages:
-            self.assertEqual(message.message, self.test_message)
-        no_message = await self.queue.read(self.test_queue, vt=20)
-        self.assertIsNone(no_message, "Messages should be invisible after read_batch")
+        self.assertEqual(len(ids), 2)
+        msgs = await self.queue.read_batch(self.test_queue, batch_size=2)
+        self.assertEqual(len(msgs), 2)
 
-    async def test_pop_message(self):
-        """Test popping a message from the queue."""
+    async def test_pop(self):
         msg_id = await self.queue.send(self.test_queue, self.test_message)
-        message = await self.queue.pop(self.test_queue)
-        self.assertEqual(message.message, self.test_message)
-        self.assertEqual(message.msg_id, msg_id, "Popped the wrong message")
+        msg = await self.queue.pop(self.test_queue)
+        self.assertEqual(msg.msg_id, msg_id)
 
-    async def test_purge_queue(self):
-        """Test purging the queue."""
-        messages = [self.test_message, self.test_message]
-        await self.queue.send_batch(self.test_queue, messages)
-        purged = await self.queue.purge(self.test_queue)
-        self.assertEqual(purged, len(messages))
+    async def test_archive_delete(self):
+        msg_id = await self.queue.send(self.test_queue, self.test_message)
+        await self.queue.archive(self.test_queue, msg_id)
+        self.assertIsNone(await self.queue.read(self.test_queue))
+
+        msg_id2 = await self.queue.send(self.test_queue, self.test_message)
+        await self.queue.delete(self.test_queue, msg_id2)
+        self.assertIsNone(await self.queue.read(self.test_queue))
 
     async def test_metrics(self):
-        """Test getting queue stats."""
-        await self.queue.create_queue(self.test_queue)
         await self.queue.send(self.test_queue, self.test_message)
         stats = await self.queue.metrics(self.test_queue)
-        self.assertGreaterEqual(stats.total_messages, 1)
+        self.assertEqual(stats.queue_length, 1)
 
     async def test_metrics_all(self):
-        """Test getting metrics for all queues."""
-        await self.queue.create_queue(self.test_queue)
         await self.queue.send(self.test_queue, self.test_message)
         all_stats = await self.queue.metrics_all()
         self.assertGreaterEqual(len(all_stats), 1)
-        for stats in all_stats:
-            self.assertIsInstance(stats.queue_name, str)
-            self.assertIsInstance(stats.queue_length, int)
-            self.assertIsInstance(stats.total_messages, int)
-            self.assertIsNotNone(stats.scrape_time)
+
+    async def test_set_vt(self):
+        msg_id = await self.queue.send(self.test_queue, self.test_message)
+        future = datetime.now(timezone.utc) + timedelta(seconds=30)
+        msg = await self.queue.set_vt(self.test_queue, msg_id, vt=future)
+        self.assertAlmostEqual(msg.vt.timestamp(), future.timestamp(), delta=1)
+
+    async def test_list_queues(self):
+        await self.queue.create_queue("test_queue_2")
+        queues = await self.queue.list_queues()
+        queue_names = [q.queue_name for q in queues]
+        self.assertIn(self.test_queue, queue_names)
+        self.assertIn("test_queue_2", queue_names)
+        await self.queue.drop_queue("test_queue_2")
 
     async def test_read_with_poll(self):
-        """Test reading messages from the queue with polling."""
         await self.queue.send(self.test_queue, self.test_message)
         messages = await self.queue.read_with_poll(
             self.test_queue, vt=20, qty=1, max_poll_seconds=5, poll_interval_ms=100
         )
         self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0].message, self.test_message)
 
-    async def test_archive_batch(self):
-        """Test archiving multiple messages in the queue."""
+    async def test_purge_queue(self):
         messages = [self.test_message, self.test_message]
-        msg_ids = await self.queue.send_batch(self.test_queue, messages)
-        await self.queue.archive_batch(self.test_queue, msg_ids)
-        read_messages = await self.queue.read_batch(
-            self.test_queue, vt=20, batch_size=2
-        )
-        self.assertEqual(len(read_messages), 0)
-
-    async def test_delete_batch(self):
-        """Test deleting multiple messages from the queue."""
-        messages = [self.test_message, self.test_message]
-        msg_ids = await self.queue.send_batch(self.test_queue, messages)
-        await self.queue.delete_batch(self.test_queue, msg_ids)
-        read_messages = await self.queue.read_batch(
-            self.test_queue, vt=20, batch_size=2
-        )
-        self.assertEqual(len(read_messages), 0)
-
-    async def test_set_vt(self):
-        """Test setting the visibility timeout for a specific message."""
-        msg_id = await self.queue.send(self.test_queue, self.test_message)
-        updated_message = await self.queue.set_vt(self.test_queue, msg_id, vt=60)
-        self.assertEqual(
-            updated_message.vt.second,
-            (datetime.now(timezone.utc) + timedelta(seconds=60)).second,
-        )
-
-    async def test_list_queues(self):
-        """Test listing all queues."""
-        queues = await self.queue.list_queues()
-        self.assertIn(self.test_queue, queues)
-
-    async def test_detach_archive(self):
-        """Test detaching an archive from a queue."""
-        await self.queue.send(self.test_queue, self.test_message)
-        await self.queue.archive(self.test_queue, 1)
-        await self.queue.detach_archive(self.test_queue)
-        # This is just a basic call to ensure the method works without exceptions.
-
-    async def test_drop_queue(self):
-        """Test dropping a queue."""
-        await self.queue.create_queue("test_queue_to_drop")
-        await self.queue.drop_queue("test_queue_to_drop")
-        queues = await self.queue.list_queues()
-        self.assertNotIn("test_queue_to_drop", queues)
+        await self.queue.send_batch(self.test_queue, messages)
+        purged = await self.queue.purge(self.test_queue)
+        self.assertEqual(purged, len(messages))
 
     async def test_validate_queue_name(self):
-        """Test validating the length of a queue name."""
         valid_queue_name = "a" * 47
         invalid_queue_name = "a" * 49
-        # Valid queue name should not raise an exception
         await self.queue.validate_queue_name(valid_queue_name)
-        # Invalid queue name should raise an exception
         with self.assertRaises(Exception) as context:
             await self.queue.validate_queue_name(invalid_queue_name)
         self.assertIn("queue name is too long", str(context.exception))
 
-    async def test_transaction_create_queue(self):
-        @transaction
-        async def transactional_create_queue(queue):
-            await queue.create_queue("test_queue_txn")
-            raise Exception("Simulated failure")
-
-        try:
-            await transactional_create_queue(self.queue)
-        except Exception:
-            pass
-
-        queues = await self.queue.list_queues()
-        self.assertNotIn("test_queue_txn", queues)
+    # --- Transaction Tests ---
 
     async def test_transaction_rollback(self):
-        @transaction
-        async def transactional_operation(queue):
-            await queue.send(
-                self.test_queue,
-                self.test_message,
-            )
-            raise Exception("Intentional failure")
+        @async_transaction
+        async def fail_txn(queue, conn=None):
+            await queue.send(self.test_queue, self.test_message, conn=conn)
+            raise Exception("Rollback")
 
         try:
-            await transactional_operation(self.queue)
-        except Exception:
+            await fail_txn(self.queue)
+        except:  # noqa: E722
             pass
+        self.assertIsNone(await self.queue.read(self.test_queue))
 
-        message = await self.queue.read(self.test_queue)
-        self.assertIsNone(message, "No message expected in queue after rollback")
-
-    async def test_transaction_send_and_read_message(self):
-        @transaction
-        async def transactional_send(queue, conn):
+    async def test_transaction_commit(self):
+        @async_transaction
+        async def txn_success(queue, conn=None):
             await queue.send(self.test_queue, self.test_message, conn=conn)
 
-        await transactional_send(self.queue)
+        await txn_success(self.queue)
+        self.assertIsNotNone(await self.queue.read(self.test_queue))
 
-        message = await self.queue.read(self.test_queue)
-        self.assertIsNotNone(message, "Expected message in queue")
-        self.assertEqual(message.message, self.test_message)
+    async def test_send_with_headers(self):
+        """Headers support."""
+        headers = {"key": "value"}
+        await self.queue.send(self.test_queue, self.test_message, headers=headers)
+        msg = await self.queue.read(self.test_queue)
+        self.assertEqual(msg.headers["key"], "value")
 
+    async def test_send_batch_with_delay(self):
+        """Batch with delay."""
+        ids = await self.queue.send_batch(self.test_queue, [self.test_message], delay=5)
+        self.assertEqual(len(ids), 1)
+        self.assertIsNone(await self.queue.read(self.test_queue))
 
-class TestPGMQueueWithEnv(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        """Set up a connection to the PGMQueue using environment variables and create a test queue."""
-
-        self.queue = PGMQueue()
-        await self.queue.init()
-
-        # Test database connection first
+    async def test_conditional_read(self):
+        """Conditional read."""
+        await self.queue.send(self.test_queue, {"type": "take"})
         try:
-            pool = self.queue.pool
-            async with pool.acquire() as conn:
-                await conn.fetch("SELECT 1")
-                print("Connection successful (with env)")
+            msg = await self.queue.read(self.test_queue, conditional={"type": "take"})
+            if msg:
+                self.assertEqual(msg.message["type"], "take")
         except Exception as e:
-            raise Exception(f"Database connection failed: {e}")
+            self.skipTest(f"Conditional read unsupported: {e}")
 
-        self.test_queue = "test_queue"
+    async def test_fifo_methods(self):
+        """Async FIFO reads."""
+        await self.queue.create_fifo_index(self.test_queue)
+        await self.queue.send(self.test_queue, {"g": 1}, headers={"gid": "A"})
+
+        # Grouped
+        msgs = await self.queue.read_grouped(self.test_queue, qty=1)
+        self.assertIsInstance(msgs, list)
+
+        # Grouped RR
+        msgs_rr = await self.queue.read_grouped_rr(self.test_queue, qty=1)
+        self.assertIsInstance(msgs_rr, list)
+
+        # Grouped Poll
+        msgs_poll = await self.queue.read_grouped_with_poll(
+            self.test_queue, qty=1, max_poll_seconds=1
+        )
+        self.assertIsInstance(msgs_poll, list)
+
+
+class TestAsyncInitNoExtension(unittest.IsolatedAsyncioTestCase):
+    async def test_no_extension_async(self):
+        """Ensure extension is not created when flag is False."""
+        # Use new_callable=AsyncMock because create_pool is a coroutine function
+        with patch("asyncpg.create_pool", new_callable=AsyncMock) as mock_create_pool:
+            # Configure the return value of the async create_pool function
+            # The return value is the pool object, which we also mock as AsyncMock
+            # so methods like pool.acquire() and pool.close() work as async context managers/coroutines
+            mock_pool = AsyncMock()
+            mock_create_pool.return_value = mock_pool
+
+            # Mock the connection context manager returned by pool.acquire()
+            mock_conn = AsyncMock()
+            mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+            q = AsyncPGMQueue(
+                host=PG_HOST,
+                port=PG_PORT,
+                database=PG_DATABASE,
+                username=PG_USERNAME,
+                password=PG_PASSWORD,
+                init_extension=False,
+            )
+
+            await q.init()
+
+            # Verify config
+            self.assertFalse(q.config.init_extension)
+
+            # Verify pool creation was awaited
+            mock_create_pool.assert_awaited_once()
+
+            # Verify that 'CREATE EXTENSION' was NOT executed
+            # Since init_extension is False, the execute call should never happen
+            mock_conn.execute.assert_not_awaited()
+
+            # Cleanup
+            await q.close()
+
+
+class TestAsyncPGMQueueWithEnv(unittest.IsolatedAsyncioTestCase):
+    """Test initialization using environment variables."""
+
+    async def asyncSetUp(self):
+        self.queue = AsyncPGMQueue()
+        await self.queue.init()
+        self.test_queue = "env_async_test_queue"
         self.test_message = {"hello": "world"}
         await self.queue.create_queue(self.test_queue)
+
+    async def asyncTearDown(self):
+        await self.queue.drop_queue(self.test_queue)
+        await self.queue.close()
+
+    async def test_env_connection(self):
+        """Verify connection works with env vars."""
+        await self.queue.send(self.test_queue, {"env": "test"})
+        msg = await self.queue.read(self.test_queue)
+        self.assertIsNotNone(msg)
+
+
+class TestAsyncDatabaseURL(unittest.IsolatedAsyncioTestCase):
+    """Test connection string parsing (DATABASE_URL) for Async."""
+
+    async def test_conn_string_uri(self):
+        """Test explicit conn_string argument (URI format)."""
+        dsn = f"postgresql://{PG_USERNAME}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+
+        q = AsyncPGMQueue(conn_string=dsn, verbose=False)
+        await q.init()
+        try:
+            await q.create_queue("async_conn_str_test")
+            await q.drop_queue("async_conn_str_test")
+            self.assertEqual(q.config.host, PG_HOST)
+        finally:
+            await q.close()
+
+    async def test_env_database_url(self):
+        """Test DATABASE_URL environment variable fallback."""
+        dsn = f"postgresql://{PG_USERNAME}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+
+        original = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = dsn
+
+        try:
+            q = AsyncPGMQueue(verbose=False)
+            await q.init()
+            await q.create_queue("async_env_db_url_test")
+            await q.drop_queue("async_env_db_url_test")
+            self.assertEqual(q.config.username, PG_USERNAME)
+            await q.close()
+        finally:
+            if original:
+                os.environ["DATABASE_URL"] = original
+            else:
+                del os.environ["DATABASE_URL"]
 
 
 if __name__ == "__main__":

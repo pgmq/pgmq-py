@@ -1,77 +1,71 @@
-# decorators.py
+# src/pgmq/decorators.py
+"""
+Transaction decorators for sync and async operations.
+
+Provides automatic transaction management with connection injection.
+"""
+
 import functools
+from typing import Callable, Any
 
 
-def transaction(func):
-    """Decorator to run a function within a database transaction."""
+def transaction(func: Callable) -> Callable:
+    """
+    Synchronous transaction decorator.
+
+    Automatically manages database transactions by:
+    1. Checking if 'conn' is already provided (nested transactions)
+    2. If not, acquiring connection from pool and starting transaction
+    3. Injecting connection as 'conn' keyword argument
+    4. Handling commit/rollback automatically
+
+    Usage:
+        @transaction
+        def my_method(self, queue: str, conn=None):
+            # conn is provided, either injected or passed explicitly
+            conn.execute("SELECT ...")
+    """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        if args and hasattr(args[0], "pool") and hasattr(args[0], "logger"):
-            self = args[0]
+    def wrapper(self, *args: Any, **kwargs: Any) -> Any:
+        # Check if connection already provided
+        if "conn" in kwargs and kwargs["conn"] is not None:
+            return func(self, *args, **kwargs)
 
-            if "conn" not in kwargs:
-                with self.pool.connection() as conn:
-                    with conn.transaction():
-                        self.logger.debug(f"Transaction started with conn: {conn}")
-                        try:
-                            kwargs["conn"] = conn  # Inject 'conn' into kwargs
-                            result = func(*args, **kwargs)
-                            self.logger.debug(
-                                f"Transaction completed with conn: {conn}"
-                            )
-                            return result
-                        except Exception as e:
-                            self.logger.error(
-                                f"Transaction failed with exception: {e}, rolling back."
-                            )
-                            raise
-            else:
-                return func(*args, **kwargs)
-
-        else:
-            queue = kwargs.get("queue") or args[0]
-
-            if "conn" not in kwargs:
-                with queue.pool.connection() as conn:
-                    with conn.transaction():
-                        queue.logger.debug(f"Transaction started with conn: {conn}")
-                        try:
-                            kwargs["conn"] = conn  # Inject 'conn' into kwargs
-                            result = func(*args, **kwargs)
-                            queue.logger.debug(
-                                f"Transaction completed with conn: {conn}"
-                            )
-                            return result
-                        except Exception as e:
-                            queue.logger.error(
-                                f"Transaction failed with exception: {e}, rolling back."
-                            )
-                            raise
-            else:
-                return func(*args, **kwargs)
+        # Acquire connection and manage transaction
+        with self.pool.connection() as conn:
+            with conn.transaction():
+                kwargs["conn"] = conn
+                return func(self, *args, **kwargs)
 
     return wrapper
 
 
-def async_transaction(func):
-    """Asynchronous decorator to run a method within a database transaction."""
+def async_transaction(func: Callable) -> Callable:
+    """
+    Asynchronous transaction decorator.
+
+    Same functionality as @transaction but for async methods using asyncpg.
+    Manages asyncpg transactions properly with explicit start/commit/rollback.
+    """
 
     @functools.wraps(func)
-    async def wrapper(self, *args, **kwargs):
-        if "conn" not in kwargs:
-            async with self.pool.acquire() as conn:
-                txn = conn.transaction()
-                await txn.start()
-                try:
-                    kwargs["conn"] = conn
-                    result = await func(self, *args, **kwargs)
-                    await txn.commit()
-                    return result
-                except Exception:
-                    await txn.rollback()
-                    raise
-        else:
+    async def wrapper(self, *args: Any, **kwargs: Any) -> Any:
+        # Check if connection already provided
+        if "conn" in kwargs and kwargs["conn"] is not None:
             return await func(self, *args, **kwargs)
+
+        # Acquire connection and manage transaction
+        async with self.pool.acquire() as conn:
+            txn = conn.transaction()
+            await txn.start()
+            try:
+                kwargs["conn"] = conn
+                result = await func(self, *args, **kwargs)
+                await txn.commit()
+                return result
+            except Exception:
+                await txn.rollback()
+                raise
 
     return wrapper
