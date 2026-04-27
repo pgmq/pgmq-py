@@ -14,6 +14,13 @@ To use the async version, install with the optional dependencies:
 pip install pgmq[async]
 ```
 
+To use the SQLAlchemy-based clients, install with:
+
+```bash
+pip install pgmq[sqlalchemy]        # For sync SQLAlchemy client
+pip install pgmq[sqlalchemy-async]  # For async SQLAlchemy client
+```
+
 Dependencies:
 
 - Postgres running the [PGMQ extension](https://github.com/pgmq/pgmq).
@@ -59,6 +66,48 @@ async def main():
 ```
 
 Then, the interface is exactly the same as the sync version.
+
+### Using SQLAlchemy
+
+If you prefer to use SQLAlchemy for database connections, you can use the SQLAlchemy-based clients:
+
+```python
+# Sync SQLAlchemy client
+from pgmq.sqlalchemy_queue import PGMQueue
+
+queue = PGMQueue(
+    host="localhost",
+    port="5432",
+    username="postgres",
+    password="postgres",
+    database="postgres"
+)
+
+# Or with an existing SQLAlchemy engine:
+# from sqlalchemy import create_engine
+# engine = create_engine("postgresql://...")
+# queue = PGMQueue(engine=engine)
+
+queue.create_queue("my_queue")
+queue.send("my_queue", {"hello": "world"})
+
+# Async SQLAlchemy client
+from pgmq.sqlalchemy_async_queue import PGMQueue
+
+async def main():
+    queue = PGMQueue(
+        host="localhost",
+        port="5432",
+        username="postgres",
+        password="postgres",
+        database="postgres"
+    )
+    await queue.init()
+    await queue.create_queue("my_queue")
+    await queue.send("my_queue", {"hello": "world"})
+```
+
+The SQLAlchemy clients provide the same interface as the psycopg-based clients but use SQLAlchemy Core for database operations, making them compatible with existing SQLAlchemy-based applications.
 
 ### Initialize a connection to Postgres without environment variables
 
