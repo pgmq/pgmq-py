@@ -45,6 +45,7 @@ bench = [
     "typer>=0.17.4",
 ]
 dev = [
+    "loguru>=0.7.3",
     "pre-commit>=4.3.0",
     "ruff>=0.12.12",
 ]
