@@ -15,7 +15,7 @@ clear-postgres:
 	docker rm -f pgmq-postgres || true
 
 run-pgmq-postgres:
-	docker run -d --name pgmq-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 ghcr.io/pgmq/pg18-pgmq:v1.10.0
+	docker run -d --name pgmq-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 ghcr.io/pgmq/pg18-pgmq:latest
 
 test: clear-postgres run-pgmq-postgres
 	sleep 10  # Give PostgreSQL time to start
