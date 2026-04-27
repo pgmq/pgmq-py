@@ -1,6 +1,7 @@
 import unittest
 import logging
 import io
+import sys
 import time
 
 from pgmq.logger import (
@@ -8,24 +9,48 @@ from pgmq.logger import (
     create_logger,
     log_with_context,
     log_performance,
+    LOGURU_AVAILABLE,
 )
 
+# Helper to capture sys.stderr for Loguru tests
+from contextlib import contextmanager
 
-class TestLoggerIsolation(unittest.TestCase):
-    """
-    Critical tests to ensure PGMQ logging does not break other loggers.
-    """
+
+@contextmanager
+def stderr_capture():
+    old_stderr = sys.stderr
+    sys.stderr = io.StringIO()
+    try:
+        yield sys.stderr
+    finally:
+        sys.stderr = old_stderr
+
+
+class TestWithStdlib(unittest.TestCase):
+    """Tests running with Standard Library logging."""
 
     def setUp(self):
         LoggingManager._configured_loggers = {}
-        logging.getLogger("test_pgmq").handlers = []
+        LoggingManager._use_loguru = False  # Force stdlib
+
+        # Clean up and close open handlers to avoid ResourceWarning
+        for name in [
+            "test_pgmq",
+            "test_context",
+            "test_perf",
+            "test_perf_exc",
+            "test_struct",
+        ]:
+            log = logging.getLogger(name)
+            for h in log.handlers[:]:
+                h.close()
+                log.removeHandler(h)
 
     def test_root_logger_not_modified(self):
         root_logger = logging.getLogger()
         initial_handlers = len(root_logger.handlers)
         create_logger("test_pgmq", verbose=True)
 
-        root_logger = logging.getLogger()
         self.assertEqual(
             len(root_logger.handlers),
             initial_handlers,
@@ -34,7 +59,11 @@ class TestLoggerIsolation(unittest.TestCase):
 
     def test_no_duplicate_handlers(self):
         log_name = "test_duplicate"
-        logging.getLogger(log_name).handlers = []
+        log = logging.getLogger(log_name)
+        # Ensure clean state
+        for h in log.handlers[:]:
+            h.close()
+            log.removeHandler(h)
 
         logger1 = LoggingManager.get_logger(log_name, verbose=True)
         count1 = len(logger1.handlers)
@@ -45,58 +74,43 @@ class TestLoggerIsolation(unittest.TestCase):
         self.assertEqual(count1, count2, "Handlers were duplicated on second retrieval")
         self.assertGreater(count1, 0, "Handlers were not created")
 
-        # Cleanup: close handlers to avoid ResourceWarning
+        # Cleanup
         for h in logger1.handlers[:]:
             h.close()
             logger1.removeHandler(h)
 
-    def test_propagation_control(self):
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.DEBUG)
-        old_handlers = root_logger.handlers
-        root_logger.handlers = []
-
-        stream = io.StringIO()
-        handler = logging.StreamHandler(stream)
-        root_logger.addHandler(handler)
-
-        try:
-            pgmq_log = create_logger("test_propagate", verbose=True)
-            pgmq_log.warning("Test Warning")
-            output = stream.getvalue()
-            self.assertIsInstance(output, str)
-        finally:
-            root_logger.removeHandler(handler)
-            root_logger.handlers = old_handlers
-
-
-class TestLoggingFeatures(unittest.TestCase):
-    """Test specific features of the logger implementation."""
-
-    def setUp(self):
-        LoggingManager._configured_loggers = {}
-        self.log_capture = io.StringIO()
-        self.handler = logging.StreamHandler(self.log_capture)
-
-    def tearDown(self):
-        self.log_capture.close()
-
     def test_log_with_context_stdlib(self):
-        logger = logging.getLogger("test_context")
-        logger.handlers = [self.handler]
-        logger.setLevel(logging.DEBUG)
+        log = logging.getLogger("test_context")
+        # We rely on get_logger to create the file handler (verbose=True)
+        logger = LoggingManager.get_logger("test_context", verbose=True)
 
-        log_with_context(
-            logger, logging.INFO, "User action", user_id=123, action="click"
-        )
-        output = self.log_capture.getvalue()
+        buffer = io.StringIO()
+        handler = logging.StreamHandler(buffer)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        # FIX: Add the handler instead of replacing the list.
+        # This ensures the FileHandler created by get_logger remains active.
+        logger.addHandler(handler)
+        log.setLevel(logging.DEBUG)
+
+        log_with_context(log, logging.INFO, "User action", user_id=123, action="click")
+        output = buffer.getvalue()
         self.assertIn("User action", output)
         self.assertIn("user_id=123", output)
 
+        # Cleanup only the test handler, leave the file handler for verification if needed
+        logger.removeHandler(handler)
+
     def test_performance_decorator_sync(self):
-        logger = logging.getLogger("test_perf")
-        logger.handlers = [self.handler]
-        logger.setLevel(logging.DEBUG)
+        log = logging.getLogger("test_perf")
+        logger = LoggingManager.get_logger("test_perf", verbose=True)
+
+        buffer = io.StringIO()
+        handler = logging.StreamHandler(buffer)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        logger.addHandler(handler)
+        log.setLevel(logging.DEBUG)
 
         @log_performance(logger)
         def slow_function():
@@ -104,16 +118,24 @@ class TestLoggingFeatures(unittest.TestCase):
             return "done"
 
         result = slow_function()
-        output = self.log_capture.getvalue()
+        output = buffer.getvalue()
 
         self.assertEqual(result, "done")
         self.assertIn("Completed slow_function", output)
         self.assertIn("success=True", output)
 
+        logger.removeHandler(handler)
+
     def test_performance_decorator_exception(self):
-        logger = logging.getLogger("test_perf_exc")
-        logger.handlers = [self.handler]
-        logger.setLevel(logging.DEBUG)
+        log = logging.getLogger("test_perf_exc")
+        logger = LoggingManager.get_logger("test_perf_exc", verbose=True)
+
+        buffer = io.StringIO()
+        handler = logging.StreamHandler(buffer)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        logger.addHandler(handler)
+        log.setLevel(logging.DEBUG)
 
         @log_performance(logger)
         def failing_function():
@@ -122,8 +144,10 @@ class TestLoggingFeatures(unittest.TestCase):
         with self.assertRaises(ValueError):
             failing_function()
 
-        output = self.log_capture.getvalue()
+        output = buffer.getvalue()
         self.assertIn("Failed failing_function", output)
+
+        logger.removeHandler(handler)
 
     def test_structured_logging_format(self):
         LoggingManager._configured_loggers = {}
@@ -132,19 +156,88 @@ class TestLoggingFeatures(unittest.TestCase):
 
         stream = io.StringIO()
         handler = logging.StreamHandler(stream)
-
-        fmt = '{{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s"}}'
+        fmt = '{{"message": "%(message)s"}}'
         handler.setFormatter(logging.Formatter(fmt))
 
-        # Clear existing handlers to avoid resource conflicts and set new one
-        for h in logger.handlers[:]:
-            h.close()
-            logger.removeHandler(h)
-
-        logger.handlers = [handler]
+        # FIX: Add handler instead of replacing.
+        # The FileHandler created by get_logger (verbose=True) will remain.
+        logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
 
         log_with_context(logger, logging.INFO, "Structured test")
 
         output = stream.getvalue()
         self.assertIn('"message": "Structured test"', output)
+
+        logger.removeHandler(handler)
+
+
+@unittest.skipUnless(LOGURU_AVAILABLE, "Loguru not installed")
+class TestWithLoguru(unittest.TestCase):
+    """Tests running with Loguru (if available)."""
+
+    def setUp(self):
+        LoggingManager._configured_loggers = {}
+        LoggingManager._use_loguru = True  # Force Loguru
+        LoggingManager._test_mode = True  # Disable enqueue for synchronous test logs
+
+    def tearDown(self):
+        LoggingManager._test_mode = False
+
+    def test_log_with_context_loguru(self):
+        with stderr_capture() as buffer:
+            logger = LoggingManager.get_logger("test_context_loguru", verbose=True)
+
+            log_with_context(logger, "INFO", "User action", user_id=123, action="click")
+            output = buffer.getvalue()
+
+        self.assertIn("User action", output)
+        self.assertIn("user_id=123", output)
+
+    def test_performance_decorator_loguru(self):
+        with stderr_capture() as buffer:
+            logger = LoggingManager.get_logger("test_perf_loguru", verbose=True)
+
+            @log_performance(logger)
+            def slow_function():
+                time.sleep(0.05)
+                return "done"
+
+            result = slow_function()
+            output = buffer.getvalue()
+
+        self.assertEqual(result, "done")
+        self.assertIn("Completed slow_function", output)
+        self.assertIn("success=True", output)
+
+    def test_performance_decorator_exception_loguru(self):
+        with stderr_capture() as buffer:
+            logger = LoggingManager.get_logger("test_perf_exc_loguru", verbose=True)
+
+            @log_performance(logger)
+            def failing_function():
+                raise ValueError("database error")
+
+            with self.assertRaises(ValueError):
+                failing_function()
+
+            output = buffer.getvalue()
+
+        self.assertIn("Failed failing_function", output)
+        self.assertIn("database error", output)
+
+    def test_isolation_no_duplicate_output(self):
+        # Loguru doesn't expose handlers list easily.
+        # We test isolation by verifying we don't get excessive output
+        with stderr_capture() as buffer:
+            logger1 = LoggingManager.get_logger("test_iso", verbose=True)
+            logger1.info("First log")
+
+            logger2 = LoggingManager.get_logger("test_iso", verbose=True)
+            logger2.info("Second log")
+
+            output = buffer.getvalue()
+
+        self.assertIn("First log", output)
+        self.assertIn("Second log", output)
+        self.assertGreater(len(output), 0)

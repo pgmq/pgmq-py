@@ -22,16 +22,13 @@ except ImportError:
 class LoggingManager:
     """
     Centralized logging manager for PGMqueue with dual backend support.
-
-    Provides a unified interface for both standard library logging and loguru,
-    with automatic backend detection and backward compatibility with existing
-    PGMQueue implementations.
     """
 
     _configured_loggers: Dict[str, Any] = {}
     _loguru_handler_ids: Set[int] = set()
     _use_loguru: bool = LOGURU_AVAILABLE
     _configured: bool = False
+    _test_mode: bool = False  # Flag to disable async features (enqueue) during tests
 
     @classmethod
     def get_logger(
@@ -51,9 +48,6 @@ class LoggingManager:
     ) -> Union[logging.Logger, Any]:
         """
         Retrieve or create a configured logger instance.
-
-        Returns cached logger if name exists. Otherwise creates new logger
-        using detected backend (loguru preferred if available).
         """
         # Create a cache key based on configuration to avoid mixing configs
         cache_key = f"{name}:{verbose}:{log_filename}:{structured}:{rotation}:{retention}:{compression}"
@@ -204,8 +198,10 @@ class LoggingManager:
 
         needs_custom_handler = bool(verbose or log_filename)
 
+        # FIX: Disable enqueue in test mode to ensure synchronous logging for assertions
+        should_enqueue = not cls._test_mode
+
         if needs_custom_handler:
-            # Remove previous handlers to avoid duplication in interactive sessions
             cls._remove_pgmq_handlers()
 
             # Console Handler
@@ -213,7 +209,7 @@ class LoggingManager:
                 sys.stderr,
                 format=log_format,
                 level=effective_level,
-                enqueue=True,
+                enqueue=should_enqueue,  # Dynamic based on test mode
                 backtrace=True,
                 diagnose=True,
             )
@@ -229,9 +225,9 @@ class LoggingManager:
                     rotation=rotation or "10 MB",
                     retention=retention or "1 week",
                     compression=compression,
-                    enqueue=True,
-                    backtrace=True,  # Restored
-                    diagnose=True,  # Restored
+                    enqueue=should_enqueue,
+                    backtrace=True,
+                    diagnose=True,
                 )
                 cls._loguru_handler_ids.add(file_id)
 
@@ -273,7 +269,10 @@ class LoggingManager:
                     log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 
             handler_id = loguru_logger.add(
-                sys.stderr, format=log_format, level=log_level, enqueue=True
+                sys.stderr,
+                format=log_format,
+                level=log_level,
+                enqueue=not cls._test_mode,
             )
             cls._loguru_handler_ids.add(handler_id)
         else:
@@ -282,7 +281,6 @@ class LoggingManager:
             if not any(
                 isinstance(h, logging.StreamHandler) for h in root_logger.handlers
             ):
-                console_handler = logging.StreamHandler()
                 console_handler = logging.StreamHandler()
                 formatter = logging.Formatter(
                     log_format or "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -300,9 +298,32 @@ class LoggingManager:
     ) -> None:
         """
         Emit a log entry with structured context data.
+        Adapts automatically to logger type (logging.Logger vs loguru).
         """
-        if cls._use_loguru:
+        # Check if the passed logger is a standard library logger
+        is_stdlib = isinstance(logger, logging.Logger)
+
+        if is_stdlib:
+            # Standard Library Path
             if context:
+                context_str = " | ".join([f"{k}={v}" for k, v in context.items()])
+                message = f"{message} | {context_str}"
+
+            if isinstance(level, str):
+                level = getattr(logging, level.upper(), logging.INFO)
+
+            logger.log(level, message)
+        else:
+            # Loguru Path (or compatible logger)
+            # FIX: Ensure context appears in text logs, not just in structured ones.
+            # Loguru's bind() puts context in `extra`, but if the user is using
+            # the default text format, `extra` keys aren't listed unless explicitly
+            # formatted. By appending the context to the message string, we mirror
+            # the stdlib behavior where context is always visible.
+            if context:
+                context_str = " | ".join([f"{k}={v}" for k, v in context.items()])
+                message = f"{message} | {context_str}"
+                # We still bind to make it available in `extra` for structured loggers
                 logger = logger.bind(**context)
 
             if isinstance(level, int):
@@ -314,15 +335,6 @@ class LoggingManager:
                     logging.CRITICAL: "CRITICAL",
                 }
                 level = level_map.get(level, "INFO")
-
-            logger.log(level, message)
-        else:
-            if context:
-                context_str = " | ".join([f"{k}={v}" for k, v in context.items()])
-                message = f"{message} | {context_str}"
-
-            if isinstance(level, str):
-                level = getattr(logging, level.upper(), logging.INFO)
 
             logger.log(level, message)
 
