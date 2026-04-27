@@ -51,23 +51,26 @@ SEND_BATCH_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch(queue_name=>%s
 # Topic-Based Routing
 # ============================================================================
 
-SEND_TOPIC = "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb);"
+# FIX: Use direct function calls (SELECT function_name(args)) instead of SELECT * FROM function_name(args)
+# These are function calls, not table queries.
+
+SEND_TOPIC = "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb);"
 SEND_TOPIC_WITH_HEADERS = (
-    "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb);"
+    "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb);"
 )
 SEND_TOPIC_WITH_DELAY_INT = (
-    "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, delay=>%s::integer);"
+    "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb, delay=>%s::integer);"
 )
-SEND_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb, delay=>%s::integer);"
+SEND_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb, delay=>%s::integer);"
 
 SEND_BATCH_TOPIC = (
-    "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[]);"
+    "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[]);"
 )
-SEND_BATCH_TOPIC_WITH_HEADERS = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[]);"
-SEND_BATCH_TOPIC_WITH_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], delay=>%s::integer);"
-SEND_BATCH_TOPIC_WITH_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], delay=>%s::timestamptz);"
-SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::integer);"
-SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::timestamptz);"
+SEND_BATCH_TOPIC_WITH_HEADERS = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[]);"
+SEND_BATCH_TOPIC_WITH_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], delay=>%s::integer);"
+SEND_BATCH_TOPIC_WITH_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], delay=>%s::timestamptz);"
+SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::integer);"
+SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::timestamptz);"
 
 # Python API is bind_topic(pattern, queue_name) — SQL matches argument order
 BIND_TOPIC = "SELECT pgmq.bind_topic(pattern=>%s, queue_name=>%s);"
