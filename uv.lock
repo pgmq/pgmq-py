@@ -1439,6 +1439,13 @@ dependencies = [
 async = [
     { name = "asyncpg" },
 ]
+sqlalchemy = [
+    { name = "sqlalchemy" },
+]
+sqlalchemy-async = [
+    { name = "asyncpg" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
 
 [package.dev-dependencies]
 bench = [
@@ -1449,7 +1456,6 @@ bench = [
     { name = "scipy", version = "1.13.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
     { name = "scipy", version = "1.16.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "sqlalchemy" },
     { name = "typer" },
 ]
 dev = [
@@ -1460,10 +1466,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", marker = "extra == 'async'", specifier = ">=0.30.0" },
+    { name = "asyncpg", marker = "extra == 'sqlalchemy-async'", specifier = ">=0.30.0" },
     { name = "orjson", specifier = ">=3.11.3" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.10" },
+    { name = "sqlalchemy", marker = "extra == 'sqlalchemy'", specifier = ">=2.0.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'sqlalchemy-async'", specifier = ">=2.0.0" },
 ]
-provides-extras = ["async"]
+provides-extras = ["async", "sqlalchemy", "sqlalchemy-async"]
 
 [package.metadata.requires-dev]
 bench = [
@@ -1471,7 +1480,6 @@ bench = [
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "scipy", specifier = ">=1.13.1" },
-    { name = "sqlalchemy", specifier = ">=2.0.43" },
     { name = "typer", specifier = ">=0.17.4" },
 ]
 dev = [
@@ -2194,6 +2202,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ab/69/f8bbd43080b6fa75cb44ff3a1cc99aaae538dd0ade1a58206912b2565d72/sqlalchemy-2.0.43-cp39-cp39-win32.whl", hash = "sha256:b3edaec7e8b6dc5cd94523c6df4f294014df67097c8217a89929c99975811414", size = 2104031, upload-time = "2025-08-11T15:48:56.453Z" },
     { url = "https://files.pythonhosted.org/packages/36/39/2ec1b0e7a4f44d833d924e7bfca8054c72e37eb73f4d02795d16d8b0230a/sqlalchemy-2.0.43-cp39-cp39-win_amd64.whl", hash = "sha256:227119ce0a89e762ecd882dc661e0aa677a690c914e358f0dd8932a2e8b2765b", size = 2128007, upload-time = "2025-08-11T15:48:57.872Z" },
     { url = "https://files.pythonhosted.org/packages/b8/d9/13bdde6521f322861fab67473cec4b1cc8999f3871953531cf61945fad92/sqlalchemy-2.0.43-py3-none-any.whl", hash = "sha256:1681c21dd2ccee222c2fe0bef671d1aef7c504087c9c4e800371cfcc8ac966fc", size = 1924759, upload-time = "2025-08-11T15:39:53.024Z" },
+]
+
+[package.optional-dependencies]
+asyncio = [
+    { name = "greenlet" },
 ]
 
 [[package]]
