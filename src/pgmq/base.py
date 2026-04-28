@@ -10,7 +10,7 @@ import logging
 import urllib.parse
 
 from pgmq.logger import LoggingManager, log_with_context
-from psycopg.conninfo import make_dict
+from psycopg.conninfo import conninfo_to_dict
 
 
 @dataclass
@@ -95,8 +95,7 @@ class PGMQConfig:
         elif "=" in conn_string:
             try:
                 # Use psycopg's built-in parser for robust libpq string handling
-                
-                params = make_dict(conn_string)
+                params = conninfo_to_dict(conn_string)
                 if "host" in params:
                     self.host = params["host"]
                 if "port" in params:
@@ -107,23 +106,6 @@ class PGMQConfig:
                     self.username = params["user"]
                 if "password" in params:
                     self.password = params["password"]
-                parts = conn_string.split()
-                for part in parts:
-                    if "=" in part:
-                        key, val = part.split("=", 1)
-                        key = key.strip().lower()
-                        val = val.strip().strip("'\"")
-
-                        if key == "host":
-                            self.host = val
-                        elif key == "port":
-                            self.port = val
-                        elif key in ("dbname", "database"):
-                            self.database = val
-                        elif key == "user":
-                            self.username = val
-                        elif key == "password":
-                            self.password = val
             except Exception as e:
                 raise ValueError(f"Failed to parse libpq connection string: {e}")
         else:
