@@ -10,7 +10,9 @@ It also provides ASYNC_SQL_MAP, a pre-computed dictionary of asyncpg-compatible
 queries (converting %s to $1, $2, etc.) to avoid runtime string manipulation.
 """
 
-from typing import Dict
+import json
+import re
+from typing import Any, Dict, Optional, Tuple
 
 
 # ============================================================================
@@ -265,9 +267,89 @@ def get_set_vt_sql(is_batch: bool = False, vt_is_timestamp: bool = False) -> str
     return SET_VT_TZ if vt_is_timestamp else SET_VT_INT
 
 
-# ============================================================================
-# Asyncpg Optimization: Pre-computed SQL Map
-# ============================================================================
+def _iter_placeholders(sql: str):
+    """
+    Yield (start, end) indices for each ``%s`` placeholder that appears
+    outside of a string literal.
+
+    Single-quoted string literals (including escaped quotes ``''``) are
+    skipped.  This makes replacement robust against ``%s`` appearing
+    inside literal text, comments, or identifiers.
+    """
+    i = 0
+    length = len(sql)
+    while i < length:
+        ch = sql[i]
+        if ch == "'":
+            # Skip standard string literal
+            i += 1
+            while i < length:
+                if sql[i] == "'":
+                    if i + 1 < length and sql[i + 1] == "'":
+                        i += 2  # Escaped quote inside literal
+                    else:
+                        i += 1  # End of literal
+                        break
+                else:
+                    i += 1
+        elif ch == "%" and i + 1 < length and sql[i + 1] == "s":
+            yield i, i + 2
+            i += 2
+        else:
+            i += 1
+
+
+def convert_sql_params(sql: str, params: Optional[tuple] = None) -> Tuple[str, dict]:
+    """
+    Convert SQL with %s placeholders and tuple params to SQLAlchemy format.
+
+    Converts ``%s`` placeholders to ``:param_N`` style and returns
+    ``(converted_sql, param_dict)``.  Placeholders inside string
+    literals are ignored.
+    """
+    if not params:
+        return sql, {}
+
+    placeholders = list(_iter_placeholders(sql))
+    if len(placeholders) != len(params):
+        raise ValueError(
+            f"Parameter count mismatch: SQL has {len(placeholders)} placeholders "
+            f"but {len(params)} parameters were provided"
+        )
+
+    param_dict: dict[str, Any] = {}
+    result_parts: list[str] = []
+    last_idx = 0
+
+    for idx, ((start, end), param_val) in enumerate(zip(placeholders, params)):
+        param_name = f"param_{idx + 1}"
+
+        # Detect PostgreSQL JSONB casts robustly (tolerates whitespace)
+        following = sql[end:]
+        cast_match = re.match(r"\s*::\s*jsonb\s*(\[\])?", following)
+        is_jsonb = bool(cast_match)
+        is_jsonb_array = bool(cast_match) and cast_match.group(1) == "[]"
+
+        if is_jsonb_array and isinstance(param_val, list):
+            param_val = [
+                json.dumps(v) if isinstance(v, (dict, list)) else v for v in param_val
+            ]
+        elif isinstance(param_val, dict) or (isinstance(param_val, list) and is_jsonb):
+            param_val = json.dumps(param_val)
+
+        param_dict[param_name] = param_val
+        result_parts.append(sql[last_idx:start])
+        result_parts.append(f":{param_name}")
+        last_idx = end
+
+    result_parts.append(sql[last_idx:])
+    result = "".join(result_parts)
+
+    # Escape PostgreSQL :: cast operator so SQLAlchemy text() doesn't confuse
+    # the double colon with bind parameter syntax.
+    result = result.replace("::", r"\:\:")
+
+    return result, param_dict
 
 
 def _convert_psycopg_to_asyncpg(sql: str) -> str:
@@ -275,17 +357,23 @@ def _convert_psycopg_to_asyncpg(sql: str) -> str:
     Convert psycopg style SQL (%s) to asyncpg style ($1, $2...).
     Used once at module load time to create ASYNC_SQL_MAP.
     """
-    count = sql.count("%s")
-    if count == 0:
+    placeholders = list(_iter_placeholders(sql))
+    if not placeholders:
         return sql
 
-    parts = sql.split("%s")
-    result = []
-    for i, part in enumerate(parts[:-1]):
-        result.append(part)
-        result.append(f"${i + 1}")
-    result.append(parts[-1])
-    return "".join(result)
+    result_parts: list[str] = []
+    last_idx = 0
+    for i, (start, end) in enumerate(placeholders):
+        result_parts.append(sql[last_idx:start])
+        result_parts.append(f"${i + 1}")
+        last_idx = end
+    result_parts.append(sql[last_idx:])
+    return "".join(result_parts)
+
+
+# ============================================================================
+# Asyncpg Optimization: Pre-computed SQL Map
+# ============================================================================
 
 
 # Collect all SQL constants from this module to build the map automatically
