@@ -10,6 +10,7 @@ import logging
 import urllib.parse
 
 from pgmq.logger import LoggingManager, log_with_context
+from psycopg.conninfo import make_dict
 
 
 @dataclass
@@ -93,7 +94,19 @@ class PGMQConfig:
         # Libpq Format (key=value pairs separated by spaces)
         elif "=" in conn_string:
             try:
-                # Simple split handling for standard libpq strings
+                # Use psycopg's built-in parser for robust libpq string handling
+                
+                params = make_dict(conn_string)
+                if "host" in params:
+                    self.host = params["host"]
+                if "port" in params:
+                    self.port = str(params["port"])
+                if "dbname" in params:
+                    self.database = params["dbname"]
+                if "user" in params:
+                    self.username = params["user"]
+                if "password" in params:
+                    self.password = params["password"]
                 parts = conn_string.split()
                 for part in parts:
                     if "=" in part:
@@ -131,8 +144,10 @@ class PGMQConfig:
     @property
     def async_dsn(self) -> str:
         """Build asyncpg-compatible connection string (URI format)."""
+        user = urllib.parse.quote_plus(self.username)
+        password = urllib.parse.quote_plus(self.password)
         return (
-            f"postgresql://{self.username}:{self.password}@"
+            f"postgresql://{user}:{password}@"
             f"{self.host}:{self.port}/{self.database}"
         )
 
