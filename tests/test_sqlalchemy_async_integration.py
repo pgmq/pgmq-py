@@ -177,13 +177,14 @@ class TestAsyncSQLAlchemyQueue(unittest.IsolatedAsyncioTestCase):
         await queue.close()
         await external_engine.dispose()
 
-    async def test_async_session_factory(self):
-        """session() should return an AsyncSessionMaker bound to the engine."""
+    async def test_async_session_returns_session(self):
+        """session() should return an AsyncSession bound to the engine."""
         session = self.queue.session()
         self.assertIsNotNone(session)
-        # In the async implementation, queue.session() returns a factory (sessionmaker),
-        # not a direct session instance. Factories are callable and have a 'bind' attribute.
-        self.assertTrue(callable(session))
+        # queue.session() returns an AsyncSession instance,
+        # matching the synchronous implementation.
+        self.assertTrue(hasattr(session, "execute"))
+        self.assertTrue(hasattr(session, "bind"))
 
     async def test_close_disposes_engine(self):
         """close() should dispose the async engine."""
@@ -536,10 +537,10 @@ class TestAsyncSQLAlchemyQueue(unittest.IsolatedAsyncioTestCase):
         external_engine = create_async_engine(dsn)
         queue = AsyncSQLAlchemyQueue(engine=external_engine, init_extension=False)
         await queue.init()
-        Session = queue.session()
-        async with Session() as session:
-            result = await session.execute(text("SELECT 1 AS one"))
-            self.assertEqual(result.scalar(), 1)
+        session = queue.session()
+        result = await session.execute(text("SELECT 1 AS one"))
+        self.assertEqual(result.scalar(), 1)
+        await session.close()
         await queue.close()
         await external_engine.dispose()
 
