@@ -15,6 +15,7 @@ import json
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, async_sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlalchemy import text
+from sqlalchemy.engine import URL
 
 from pgmq.base import BaseQueue, PGMQConfig
 from pgmq import _sql
@@ -157,9 +158,13 @@ class PGMQueue(BaseQueue):
             return
 
         log_with_context(self.logger, logging.DEBUG, "Creating async SQLAlchemy engine")
-        connection_url = (
-            f"postgresql+asyncpg://{self.config.username}:{self.config.password}@"
-            f"{self.config.host}:{self.config.port}/{self.config.database}"
+        connection_url = URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.config.username,
+            password=self.config.password,
+            host=self.config.host,
+            port=int(self.config.port),
+            database=self.config.database,
         )
         self.engine = create_async_engine(
             connection_url,
