@@ -128,10 +128,7 @@ class PGMQConfig:
         """Build asyncpg-compatible connection string (URI format)."""
         user = urllib.parse.quote_plus(self.username)
         password = urllib.parse.quote_plus(self.password)
-        return (
-            f"postgresql://{user}:{password}@"
-            f"{self.host}:{self.port}/{self.database}"
-        )
+        return f"postgresql://{user}:{password}@{self.host}:{self.port}/{self.database}"
 
 
 class BaseQueue:
