@@ -49,7 +49,7 @@ def sqlalchemy_transaction(func: Callable) -> Callable:
     1. Checking if 'conn' is already provided (nested transactions)
     2. If not, acquiring connection from engine and starting transaction
     3. Injecting connection as 'conn' keyword argument
-    4. Handling commit/rollback automatically
+    4. Handling commit/rollback automatically via engine.begin()
 
     Usage:
         @sqlalchemy_transaction
@@ -64,16 +64,11 @@ def sqlalchemy_transaction(func: Callable) -> Callable:
         if "conn" in kwargs and kwargs["conn"] is not None:
             return func(self, *args, **kwargs)
 
-        # Acquire connection and manage transaction
-        with self.engine.connect() as conn:
-            try:
-                kwargs["conn"] = conn
-                result = func(self, *args, **kwargs)
-                conn.commit()
-                return result
-            except Exception:
-                conn.rollback()
-                raise
+        # engine.begin() starts a transaction, commits on success,
+        # and rolls back on exception (SQLAlchemy 2.0 idiom).
+        with self.engine.begin() as conn:
+            kwargs["conn"] = conn
+            return func(self, *args, **kwargs)
 
     return wrapper
 
@@ -92,16 +87,11 @@ def sqlalchemy_async_transaction(func: Callable) -> Callable:
         if "conn" in kwargs and kwargs["conn"] is not None:
             return await func(self, *args, **kwargs)
 
-        # Acquire connection and manage transaction
-        async with self.engine.connect() as conn:
-            try:
-                kwargs["conn"] = conn
-                result = await func(self, *args, **kwargs)
-                await conn.commit()
-                return result
-            except Exception:
-                await conn.rollback()
-                raise
+        # engine.begin() starts a transaction, commits on success,
+        # and rolls back on exception (SQLAlchemy 2.0 idiom).
+        async with self.engine.begin() as conn:
+            kwargs["conn"] = conn
+            return await func(self, *args, **kwargs)
 
     return wrapper
 
