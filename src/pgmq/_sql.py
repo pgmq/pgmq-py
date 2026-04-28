@@ -51,27 +51,30 @@ SEND_BATCH_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch(queue_name=>%s
 # Topic-Based Routing
 # ============================================================================
 
-SEND_TOPIC = "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb);"
+# FIX: Use direct function calls (SELECT function_name(args)) instead of SELECT * FROM function_name(args)
+# These are function calls, not table queries.
+
+SEND_TOPIC = "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb);"
 SEND_TOPIC_WITH_HEADERS = (
-    "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb);"
+    "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb);"
 )
 SEND_TOPIC_WITH_DELAY_INT = (
-    "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, delay=>%s::integer);"
+    "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb, delay=>%s::integer);"
 )
-SEND_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT pgmq.send_topic(topic=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb, delay=>%s::integer);"
+SEND_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT pgmq.send_topic(routing_key=>%s::text, msg=>%s::jsonb, headers=>%s::jsonb, delay=>%s::integer);"
 
 SEND_BATCH_TOPIC = (
-    "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[]);"
+    "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[]);"
 )
-SEND_BATCH_TOPIC_WITH_HEADERS = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[]);"
-SEND_BATCH_TOPIC_WITH_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], delay=>%s::integer);"
-SEND_BATCH_TOPIC_WITH_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], delay=>%s::timestamptz);"
-SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::integer);"
-SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(topic=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::timestamptz);"
+SEND_BATCH_TOPIC_WITH_HEADERS = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[]);"
+SEND_BATCH_TOPIC_WITH_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], delay=>%s::integer);"
+SEND_BATCH_TOPIC_WITH_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], delay=>%s::timestamptz);"
+SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_INT = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::integer);"
+SEND_BATCH_TOPIC_WITH_HEADERS_DELAY_TZ = "SELECT * FROM pgmq.send_batch_topic(routing_key=>%s::text, msgs=>%s::jsonb[], headers=>%s::jsonb[], delay=>%s::timestamptz);"
 
-# Note: Preserving logical mapping from Python (pattern, queue_name) to PGMQ (queue_name, pattern)
-BIND_TOPIC = "SELECT pgmq.bind_topic(queue_name=>%s, pattern=>%s);"
-UNBIND_TOPIC = "SELECT pgmq.unbind_topic(queue_name=>%s, pattern=>%s);"
+# Python API is bind_topic(pattern, queue_name) — SQL matches argument order
+BIND_TOPIC = "SELECT pgmq.bind_topic(pattern=>%s, queue_name=>%s);"
+UNBIND_TOPIC = "SELECT pgmq.unbind_topic(pattern=>%s, queue_name=>%s);"
 LIST_TOPIC_BINDINGS = "SELECT pattern, queue_name, bound_at, compiled_regex FROM pgmq.list_topic_bindings();"
 LIST_TOPIC_BINDINGS_FOR_QUEUE = "SELECT pattern, queue_name, bound_at, compiled_regex FROM pgmq.list_topic_bindings(queue_name=>%s);"
 TEST_ROUTING = "SELECT pattern, queue_name, compiled_regex FROM pgmq.test_routing(routing_key=>%s);"
@@ -172,7 +175,7 @@ VALIDATE_ROUTING_KEY = "SELECT pgmq.validate_routing_key(routing_key=>%s);"
 VALIDATE_TOPIC_PATTERN = "SELECT pgmq.validate_topic_pattern(pattern=>%s);"
 CREATE_FIFO_INDEX = "SELECT pgmq.create_fifo_index(queue_name=>%s);"
 CREATE_FIFO_INDEXES_ALL = "SELECT pgmq.create_fifo_indexes_all();"
-CONVERT_ARCHIVE_PARTITIONED = "SELECT pgmq.convert_archive_partitioned(queue_name=>%s, partition_interval=>%s, retention_interval=>%s, leading_partition=>%s);"
+CONVERT_ARCHIVE_PARTITIONED = "SELECT pgmq.convert_archive_partitioned(table_name=>%s, partition_interval=>%s, retention_interval=>%s, leading_partition=>%s);"
 DETACH_ARCHIVE = "SELECT pgmq.detach_archive(queue_name=>%s);"
 
 

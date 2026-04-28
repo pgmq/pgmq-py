@@ -1,3 +1,4 @@
+# tests/test_features.py
 from psycopg.errors import UndefinedFunction, RaiseException, NullValueNotAllowed
 from tests.utils import PGMQTestCase
 

@@ -41,6 +41,71 @@ def transaction(func: Callable) -> Callable:
     return wrapper
 
 
+def sqlalchemy_transaction(func: Callable) -> Callable:
+    """
+    Synchronous SQLAlchemy transaction decorator.
+
+    Automatically manages database transactions by:
+    1. Checking if 'conn' is already provided (nested transactions)
+    2. If not, acquiring connection from engine and starting transaction
+    3. Injecting connection as 'conn' keyword argument
+    4. Handling commit/rollback automatically
+
+    Usage:
+        @sqlalchemy_transaction
+        def my_method(self, queue: str, conn=None):
+            # conn is provided, either injected or passed explicitly
+            conn.execute(text("SELECT ..."))
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, *args: Any, **kwargs: Any) -> Any:
+        # Check if connection already provided
+        if "conn" in kwargs and kwargs["conn"] is not None:
+            return func(self, *args, **kwargs)
+
+        # Acquire connection and manage transaction
+        with self.engine.connect() as conn:
+            try:
+                kwargs["conn"] = conn
+                result = func(self, *args, **kwargs)
+                conn.commit()
+                return result
+            except Exception:
+                conn.rollback()
+                raise
+
+    return wrapper
+
+
+def sqlalchemy_async_transaction(func: Callable) -> Callable:
+    """
+    Asynchronous SQLAlchemy transaction decorator.
+
+    Same functionality as @sqlalchemy_transaction but for async methods
+    using SQLAlchemy's async engine.
+    """
+
+    @functools.wraps(func)
+    async def wrapper(self, *args: Any, **kwargs: Any) -> Any:
+        # Check if connection already provided
+        if "conn" in kwargs and kwargs["conn"] is not None:
+            return await func(self, *args, **kwargs)
+
+        # Acquire connection and manage transaction
+        async with self.engine.connect() as conn:
+            try:
+                kwargs["conn"] = conn
+                result = await func(self, *args, **kwargs)
+                await conn.commit()
+                return result
+            except Exception:
+                await conn.rollback()
+                raise
+
+    return wrapper
+
+
 def async_transaction(func: Callable) -> Callable:
     """
     Asynchronous transaction decorator.
