@@ -202,6 +202,7 @@ class LoggingManager:
         should_enqueue = not cls._test_mode
 
         if needs_custom_handler:
+            # Remove previous handlers to avoid duplication in interactive sessions
             cls._remove_pgmq_handlers()
 
             # Console Handler
