@@ -85,11 +85,7 @@ class PGMQueue(BaseQueue):
     def _init_pool(self) -> None:
         """Initialize the connection pool."""
         log_with_context(self.logger, logging.DEBUG, "Creating connection pool")
-        dsn = (
-            self.config.conn_string
-            if self.config.conn_string
-            else self.config.get_dsn()
-        )
+        dsn = self.config.conn_string if self.config.conn_string else self.config.dsn
         self.pool = ConnectionPool(
             dsn,
             min_size=1,

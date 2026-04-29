@@ -192,7 +192,7 @@ class PGMQueue(BaseQueue):
         """
         if self.engine is None:
             raise RuntimeError("Engine has not been initialized. Call init() first.")
-        return async_sessionmaker(bind=self.engine, expire_on_commit=False)
+        return async_sessionmaker(bind=self.engine, expire_on_commit=False)()
 
     async def close(self) -> None:
         """Close the engine and dispose of all connections.
