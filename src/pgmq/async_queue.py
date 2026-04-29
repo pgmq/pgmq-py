@@ -6,7 +6,7 @@ This module provides the async PGMQueue class using asyncpg for high-performance
 asyncio-based database operations.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 import os
@@ -14,7 +14,7 @@ import logging
 import asyncpg
 from asyncpg import Pool
 import orjson
-from pgmq.base import BaseQueue, PGMQConfig
+from pgmq.base import BaseQueue
 from pgmq import _sql
 from pgmq.decorators import async_transaction
 from pgmq.logger import log_with_context
@@ -47,7 +47,9 @@ class PGMQueue(BaseQueue):
     """
 
     # --- Backward Compatible Fields ---
-    conn_string: Optional[str] = None
+    conn_string: Optional[str] = field(
+        default_factory=lambda: os.getenv("DATABASE_URL")
+    )
     host: str = field(default_factory=lambda: os.getenv("PG_HOST", "localhost"))
     port: str = field(default_factory=lambda: os.getenv("PG_PORT", "5432"))
     database: str = field(default_factory=lambda: os.getenv("PG_DATABASE", "postgres"))
@@ -69,25 +71,9 @@ class PGMQueue(BaseQueue):
 
     def __post_init__(self) -> None:
         """Initialize configuration after dataclass construction."""
-        self.config = PGMQConfig(
-            conn_string=self.conn_string,
-            host=self.host,
-            port=self.port,
-            database=self.database,
-            username=self.username,
-            password=self.password,
-            delay=self.delay,
-            vt=self.vt,
-            pool_size=self.pool_size,
-            verbose=self.verbose,
-            log_filename=self.log_filename,
-            init_extension=self.init_extension,
-            structured_logging=self.structured_logging,
-            log_rotation=self.log_rotation,
-            log_rotation_size=self.log_rotation_size,
-            log_retention=self.log_retention,
+        super().__init__(
+            **{f.name: getattr(self, f.name) for f in fields(self.__class__)}
         )
-        super().__init__(config=self.config)
 
     async def init(self) -> None:
         """Initialize the asyncpg connection pool."""
