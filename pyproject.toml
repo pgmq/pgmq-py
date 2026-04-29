@@ -62,7 +62,7 @@ Homepage = "https://github.com/pgmq/pgmq"
 Repository = "https://github.com/pgmq/pgmq-py"
 Documentation = "https://github.com/pgmq/pgmq-py"
 "Bug Tracker" = "https://github.com/pgmq/pgmq-py/issues"
-Changelog = "https://github.com/pgmq/pgmq-py/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/pgmq/pgmq-py/releases"
 
 
 [build-system]
