@@ -48,10 +48,16 @@ class SyncNotificationListener:
         self,
         queue_name: str,
         callback: Callable[[Dict[str, Any]], None],
-        timeout: float = 5.0,
+        timeout: Optional[float] = None,
     ) -> None:
         """
         Start listening for notifications on the specified queue.
+
+        Args:
+            queue_name: The name of the queue to listen on.
+            callback: Callable invoked with the notification payload dict.
+            timeout: Maximum seconds to wait for the next notification before
+                returning. ``None`` means wait indefinitely.
         """
         # Correct channel format used in recent PGMQ versions
         channel = f"pgmq.q_{queue_name}.INSERT"
@@ -70,7 +76,7 @@ class SyncNotificationListener:
             # Quote channel name to handle any special characters safely
             self._conn.execute(f'LISTEN "{channel}";')
 
-            for notify in self._conn.notifies():
+            for notify in self._conn.notifies(timeout=timeout):
                 if self._stop_event.is_set():
                     break
                 self._handle_notify(notify, callback, queue_name)
