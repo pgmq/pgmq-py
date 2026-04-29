@@ -117,5 +117,5 @@ mike set-default latest
 - Add docstrings to all public methods.
 - Use `log_with_context` instead of bare `print()` in library code.
 - Keep SQL centralized in `src/pgmq/_sql.py`.
-- Update both `pyproject.toml` and `src/pgmq/__init__.py` versions when releasing.
+- Update `pyproject.toml` version when releasing.
 - Add tests for new features.
