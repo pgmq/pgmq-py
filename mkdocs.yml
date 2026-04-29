@@ -2,7 +2,7 @@ site_name: PGMQ Python
 site_description: Official Python client for the PGMQ PostgreSQL extension
 site_url: https://pgmq.github.io/pgmq-py/
 
-docs_dir: doc
+docs_dir: docs
 
 theme:
   name: material
