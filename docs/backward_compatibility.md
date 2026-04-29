@@ -52,4 +52,4 @@ Sync SQLAlchemy clients initialize automatically in `__post_init__`, similar to 
 
 ## Version Synchronization
 
-`pyproject.toml` and `src/pgmq/__init__.py` both declare versions. When releasing, ensure both are updated and kept in sync.
+`pyproject.toml` declares the version. When releasing, ensure it is updated; `src/pgmq/__init__.py` will fetch the new version automatically.
