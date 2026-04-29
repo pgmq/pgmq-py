@@ -24,7 +24,7 @@ class LoggingManager:
     Centralized logging manager for PGMqueue with dual backend support.
     """
 
-    _configured_loggers: Dict[str, Any] = {}
+    _configured_loggers: Dict[Any, Any] = {}
     _loguru_handler_ids: Set[int] = set()
     _use_loguru: bool = LOGURU_AVAILABLE
     _configured: bool = False
@@ -47,10 +47,40 @@ class LoggingManager:
         compression: Optional[str] = None,
     ) -> Union[logging.Logger, Any]:
         """
-        Retrieve or create a configured logger instance.
+        Retrieve or create a logger instance.
+
+        When called with all defaults this acts as a library-safe factory:
+        it returns a plain logger without injecting handlers or mutating levels.
+        Custom handlers/levels are only applied when the caller explicitly
+        requests them (e.g. ``verbose=True`` or ``log_filename="app.log"``),
+        preserving backward compatibility.
         """
-        # Create a cache key based on configuration to avoid mixing configs
-        cache_key = f"{name}:{verbose}:{log_filename}:{structured}:{rotation}:{retention}:{compression}"
+        # Detect explicit configuration requests.
+        config_requested = any(
+            (
+                verbose,
+                log_filename is not None,
+                log_format is not None,
+                log_level is not None,
+                structured,
+                rotation is not None,
+                retention is not None,
+                compression is not None,
+                enable_rotation,
+            )
+        )
+
+        if not config_requested:
+            if cls._use_loguru and LOGURU_AVAILABLE:
+                return loguru_logger.bind(logger=name)
+            return logging.getLogger(name)
+
+        # Build a precise cache key so distinct configurations never collide.
+        cache_key = (
+            f"{name!r}:{verbose}:{log_filename!r}:{log_format!r}:{log_level!r}:"
+            f"{structured}:{rotation!r}:{retention!r}:{compression!r}:"
+            f"{enable_rotation}:{max_bytes}:{backup_count}"
+        )
 
         if cache_key in cls._configured_loggers:
             return cls._configured_loggers[cache_key]
@@ -69,6 +99,7 @@ class LoggingManager:
             )
         else:
             logger = cls._configure_stdlib(
+                cache_key=cache_key,
                 name=name,
                 verbose=verbose,
                 log_filename=log_filename,
@@ -100,6 +131,7 @@ class LoggingManager:
     @classmethod
     def _configure_stdlib(
         cls,
+        cache_key: str,
         name: str,
         verbose: bool,
         log_filename: Optional[str],
@@ -111,9 +143,10 @@ class LoggingManager:
         backup_count: int,
     ) -> logging.Logger:
         """Configure and return a standard library Logger instance."""
-        logger = logging.getLogger(name)
+        logger = logging.getLogger(cache_key)
+        logger.name = name
 
-        # Return existing if already configured
+        # Return existing if already configured for this cache key
         if logger.handlers:
             return logger
 
@@ -400,7 +433,10 @@ def create_logger(
 
 
 def log_with_context(
-    logger: Union[logging.Logger, Any], level: int, message: str, **context: Any
+    logger: Union[logging.Logger, Any],
+    level: Union[int, str],
+    message: str,
+    **context: Any,
 ) -> None:
     """
     Emit log entry with structured context.
