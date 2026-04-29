@@ -14,7 +14,6 @@ import os
 import logging
 import urllib.parse
 import warnings
-import json
 from sqlalchemy import create_engine, text, Engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
@@ -40,56 +39,6 @@ def _parse_jsonb(val) -> Any:
         return None
     # psycopg returns JSONB as dict/list directly
     return val
-
-
-def _convert_sql_params(sql: str, params: Optional[tuple] = None):
-    """
-    Convert SQL with %s placeholders and tuple params to SQLAlchemy format.
-
-    Converts %s placeholders to :param_N style and returns (converted_sql, param_dict).
-    """
-    if not params:
-        return sql, {}
-
-    # Count the number of %s placeholders
-    placeholder_count = sql.count("%s")
-    if placeholder_count != len(params):
-        raise ValueError(
-            f"Parameter count mismatch: SQL has {placeholder_count} placeholders "
-            f"but {len(params)} parameters were provided"
-        )
-
-    # Replace %s with :param_N placeholders
-    param_dict = {}
-    result = sql
-    for i in range(placeholder_count):
-        param_name = f"param_{i + 1}"
-        param_val = params[i]
-
-        # Check what PostgreSQL type this placeholder is cast to
-        placeholder_idx = result.find("%s")
-        cast_suffix = result[placeholder_idx:]
-        is_jsonb = cast_suffix.startswith("%s::jsonb") or cast_suffix.startswith(
-            "%s::jsonb[]"
-        )
-        is_jsonb_array = cast_suffix.startswith("%s::jsonb[]")
-
-        if is_jsonb_array and isinstance(param_val, list):
-            param_val = [
-                json.dumps(v) if isinstance(v, (dict, list)) else v for v in param_val
-            ]
-        elif isinstance(param_val, dict) or (isinstance(param_val, list) and is_jsonb):
-            param_val = json.dumps(param_val)
-
-        param_dict[param_name] = param_val
-        # Replace one %s at a time (from left to right)
-        result = result.replace("%s", f":{param_name}", 1)
-
-    # Escape PostgreSQL :: cast operator so SQLAlchemy text() doesn't confuse
-    # the double colon with bind parameter syntax.
-    result = result.replace("::", r"\:\:")
-
-    return result, param_dict
 
 
 @dataclass
@@ -152,6 +101,7 @@ class PGMQueue(BaseQueue):
                 )
             if self.config.init_extension:
                 self._init_extensions()
+        self._session_factory = sessionmaker(bind=self.engine)
 
     def _init_engine(self) -> None:
         """Initialize the SQLAlchemy engine."""
@@ -187,7 +137,7 @@ class PGMQueue(BaseQueue):
 
     def _execute(self, sql: str, params: Optional[tuple] = None, conn=None) -> None:
         """Execute SQL without returning results."""
-        converted_sql, param_dict = _convert_sql_params(sql, params)
+        converted_sql, param_dict = _sql.convert_sql_params(sql, params)
 
         def run_query(connection):
             if param_dict:
@@ -205,7 +155,7 @@ class PGMQueue(BaseQueue):
         self, sql: str, params: Optional[tuple] = None, conn=None
     ) -> List[tuple]:
         """Execute SQL and return all results."""
-        converted_sql, param_dict = _convert_sql_params(sql, params)
+        converted_sql, param_dict = _sql.convert_sql_params(sql, params)
 
         def run_query(connection):
             if param_dict:
@@ -906,7 +856,7 @@ class PGMQueue(BaseQueue):
         """Return a new SQLAlchemy ORM Session bound to this queue's engine."""
         if self.engine is None:
             raise RuntimeError("Engine has not been initialized.")
-        return sessionmaker(bind=self.engine)()
+        return self._session_factory()
 
     def dispose(self) -> None:
         """Dispose of the engine and close all connections.
