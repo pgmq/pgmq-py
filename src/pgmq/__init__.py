@@ -43,7 +43,7 @@ from pgmq.logger import PGMQLogger, create_logger, log_performance
 # Backward compatibility: PGMQueue points to sync version
 PGMQueue = SyncPGMQueue
 
-__version__ = "2.0.0"
+__version__ = "1.1.0"
 __all__ = [
     # Clients (psycopg-based)
     "PGMQueue",  # Sync (backward compatible alias)
