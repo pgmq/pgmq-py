@@ -49,6 +49,13 @@ dev = [
     "pre-commit>=4.3.0",
     "ruff>=0.12.12",
 ]
+docs = [
+    "mike>=2.2.0",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings>=0.30.1",
+    "mkdocstrings-python>=1.18.2",
+]
 
 [project.urls]
 Homepage = "https://github.com/pgmq/pgmq"
