@@ -60,6 +60,7 @@ class PGMQueue(BaseQueue):
     def __post_init__(self):
         """Initialize connection pool after dataclass construction."""
         self.config = PGMQConfig(
+            conn_string=self.conn_string,
             host=self.host,
             port=self.port,
             database=self.database,
@@ -84,8 +85,13 @@ class PGMQueue(BaseQueue):
     def _init_pool(self) -> None:
         """Initialize the connection pool."""
         log_with_context(self.logger, logging.DEBUG, "Creating connection pool")
+        dsn = (
+            self.config.conn_string
+            if self.config.conn_string
+            else self.config.get_dsn()
+        )
         self.pool = ConnectionPool(
-            self.config.dsn,
+            dsn,
             min_size=1,
             max_size=self.config.pool_size,
             open=True,

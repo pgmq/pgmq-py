@@ -70,6 +70,7 @@ class PGMQueue(BaseQueue):
     def __post_init__(self) -> None:
         """Initialize configuration after dataclass construction."""
         self.config = PGMQConfig(
+            conn_string=self.conn_string,
             host=self.host,
             port=self.port,
             database=self.database,
@@ -91,8 +92,13 @@ class PGMQueue(BaseQueue):
     async def init(self) -> None:
         """Initialize the asyncpg connection pool."""
         log_with_context(self.logger, logging.DEBUG, "Creating asyncpg pool")
+        dsn = (
+            self.config.conn_string
+            if self.config.conn_string
+            else self.config.async_dsn
+        )
         self.pool = await asyncpg.create_pool(
-            self.config.async_dsn,
+            dsn,
             min_size=1,
             max_size=self.config.pool_size,
         )

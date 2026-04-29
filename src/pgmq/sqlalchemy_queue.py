@@ -12,14 +12,15 @@ from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 import os
 import logging
+import urllib.parse
 import warnings
+import json
 from sqlalchemy import create_engine, text, Engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
 from pgmq.base import BaseQueue, PGMQConfig
 from pgmq import _sql
-from pgmq._sql import convert_sql_params
 from pgmq.decorators import sqlalchemy_transaction
 from pgmq.logger import log_with_context
 from pgmq.messages import (
@@ -39,6 +40,56 @@ def _parse_jsonb(val) -> Any:
         return None
     # psycopg returns JSONB as dict/list directly
     return val
+
+
+def _convert_sql_params(sql: str, params: Optional[tuple] = None):
+    """
+    Convert SQL with %s placeholders and tuple params to SQLAlchemy format.
+
+    Converts %s placeholders to :param_N style and returns (converted_sql, param_dict).
+    """
+    if not params:
+        return sql, {}
+
+    # Count the number of %s placeholders
+    placeholder_count = sql.count("%s")
+    if placeholder_count != len(params):
+        raise ValueError(
+            f"Parameter count mismatch: SQL has {placeholder_count} placeholders "
+            f"but {len(params)} parameters were provided"
+        )
+
+    # Replace %s with :param_N placeholders
+    param_dict = {}
+    result = sql
+    for i in range(placeholder_count):
+        param_name = f"param_{i + 1}"
+        param_val = params[i]
+
+        # Check what PostgreSQL type this placeholder is cast to
+        placeholder_idx = result.find("%s")
+        cast_suffix = result[placeholder_idx:]
+        is_jsonb = cast_suffix.startswith("%s::jsonb") or cast_suffix.startswith(
+            "%s::jsonb[]"
+        )
+        is_jsonb_array = cast_suffix.startswith("%s::jsonb[]")
+
+        if is_jsonb_array and isinstance(param_val, list):
+            param_val = [
+                json.dumps(v) if isinstance(v, (dict, list)) else v for v in param_val
+            ]
+        elif isinstance(param_val, dict) or (isinstance(param_val, list) and is_jsonb):
+            param_val = json.dumps(param_val)
+
+        param_dict[param_name] = param_val
+        # Replace one %s at a time (from left to right)
+        result = result.replace("%s", f":{param_name}", 1)
+
+    # Escape PostgreSQL :: cast operator so SQLAlchemy text() doesn't confuse
+    # the double colon with bind parameter syntax.
+    result = result.replace("::", r"\:\:")
+
+    return result, param_dict
 
 
 @dataclass
@@ -71,6 +122,7 @@ class PGMQueue(BaseQueue):
     def __post_init__(self):
         """Initialize configuration and engine after dataclass construction."""
         self.config = PGMQConfig(
+            conn_string=self.conn_string,
             host=self.host,
             port=self.port,
             database=self.database,
@@ -104,10 +156,17 @@ class PGMQueue(BaseQueue):
     def _init_engine(self) -> None:
         """Initialize the SQLAlchemy engine."""
         log_with_context(self.logger, logging.DEBUG, "Creating SQLAlchemy engine")
-        connection_url = (
-            f"postgresql+psycopg://{self.config.username}:{self.config.password}@"
-            f"{self.config.host}:{self.config.port}/{self.config.database}"
-        )
+        if self.config.conn_string:
+            # If a full connection string is provided, use it directly
+            connection_url = self.config.conn_string
+        else:
+            # Otherwise, construct it from individual components
+            user = urllib.parse.quote_plus(self.config.username)
+            password = urllib.parse.quote_plus(self.config.password)
+            connection_url = (
+                f"postgresql+psycopg://{user}:{password}@"
+                f"{self.config.host}:{self.config.port}/{self.config.database}"
+            )
         self.engine = create_engine(
             connection_url,
             poolclass=QueuePool,
@@ -128,7 +187,7 @@ class PGMQueue(BaseQueue):
 
     def _execute(self, sql: str, params: Optional[tuple] = None, conn=None) -> None:
         """Execute SQL without returning results."""
-        converted_sql, param_dict = convert_sql_params(sql, params)
+        converted_sql, param_dict = _convert_sql_params(sql, params)
 
         def run_query(connection):
             if param_dict:
@@ -146,7 +205,7 @@ class PGMQueue(BaseQueue):
         self, sql: str, params: Optional[tuple] = None, conn=None
     ) -> List[tuple]:
         """Execute SQL and return all results."""
-        converted_sql, param_dict = convert_sql_params(sql, params)
+        converted_sql, param_dict = _convert_sql_params(sql, params)
 
         def run_query(connection):
             if param_dict:
