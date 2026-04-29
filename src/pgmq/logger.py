@@ -5,34 +5,30 @@ import logging.handlers
 import os
 import sys
 import functools
-import asyncio
+import inspect
 import time
 from datetime import datetime
 from typing import Optional, Dict, Any, Union, Set
 
 # Attempt to import loguru; fall back to standard logging if unavailable
 try:
-    from loguru import logger as loguru_logger
+    from loguru import logger as loguru_logger  # type: ignore
 
     LOGURU_AVAILABLE = True
 except ImportError:
     LOGURU_AVAILABLE = False
 
 
-class PGMQLogger:
+class LoggingManager:
     """
-    Centralized logging manager for PGMQueue with dual backend support.
-
-    Provides a unified interface for both standard library logging and loguru,
-    with automatic backend detection and backward compatibility with existing
-    PGMQueue implementations.
+    Centralized logging manager for PGMqueue with dual backend support.
     """
 
-    _loggers: Dict[str, Union[logging.Logger, Any]] = {}
-    _configured: bool = False
+    _configured_loggers: Dict[Any, Any] = {}
+    _loguru_handler_ids: Set[int] = set()
     _use_loguru: bool = LOGURU_AVAILABLE
-
-    _handler_ids: Set[int] = set()
+    _configured: bool = False
+    _test_mode: bool = False  # Flag to disable async features (enqueue) during tests
 
     @classmethod
     def get_logger(
@@ -51,33 +47,46 @@ class PGMQLogger:
         compression: Optional[str] = None,
     ) -> Union[logging.Logger, Any]:
         """
-        Retrieve or create a configured logger instance.
+        Retrieve or create a logger instance.
 
-        Returns cached logger if name exists. Otherwise creates new logger
-        using detected backend (loguru preferred if available).
-
-        Args:
-            name: Unique identifier for the logger instance.
-            verbose: Enable DEBUG level output; defaults to WARNING.
-            log_filename: Path for file output; auto-generated if verbose=True.
-            log_format: Override default message format string.
-            log_level: Explicit level override (int for stdlib, str for loguru).
-            enable_rotation: Activate RotatingFileHandler (stdlib only).
-            max_bytes: Rotation trigger size in bytes (stdlib only).
-            backup_count: Number of archived log files to retain (stdlib only).
-            structured: Output JSON format instead of plain text.
-            rotation: Rotation policy expression (loguru only, e.g., "10 MB").
-            retention: Archive cleanup policy (loguru only, e.g., "1 week").
-            compression: Archive compression format (loguru only, e.g., "gz").
-
-        Returns:
-            Configured logger compatible with the active backend.
+        When called with all defaults this acts as a library-safe factory:
+        it returns a plain logger without injecting handlers or mutating levels.
+        Custom handlers/levels are only applied when the caller explicitly
+        requests them (e.g. ``verbose=True`` or ``log_filename="app.log"``),
+        preserving backward compatibility.
         """
-        if name in cls._loggers:
-            return cls._loggers[name]
+        # Detect explicit configuration requests.
+        config_requested = any(
+            (
+                verbose,
+                log_filename is not None,
+                log_format is not None,
+                log_level is not None,
+                structured,
+                rotation is not None,
+                retention is not None,
+                compression is not None,
+                enable_rotation,
+            )
+        )
+
+        if not config_requested:
+            if cls._use_loguru and LOGURU_AVAILABLE:
+                return loguru_logger.bind(logger=name)
+            return logging.getLogger(name)
+
+        # Build a precise cache key so distinct configurations never collide.
+        cache_key = (
+            f"{name!r}:{verbose}:{log_filename!r}:{log_format!r}:{log_level!r}:"
+            f"{structured}:{rotation!r}:{retention!r}:{compression!r}:"
+            f"{enable_rotation}:{max_bytes}:{backup_count}"
+        )
+
+        if cache_key in cls._configured_loggers:
+            return cls._configured_loggers[cache_key]
 
         if cls._use_loguru:
-            logger = cls._get_loguru_logger(
+            logger = cls._configure_loguru(
                 name=name,
                 verbose=verbose,
                 log_filename=log_filename,
@@ -89,19 +98,20 @@ class PGMQLogger:
                 compression=compression,
             )
         else:
-            logger = cls._get_standard_logger(
+            logger = cls._configure_stdlib(
+                cache_key=cache_key,
                 name=name,
                 verbose=verbose,
                 log_filename=log_filename,
                 log_format=log_format,
                 log_level=log_level,
+                structured=structured,
                 enable_rotation=enable_rotation,
                 max_bytes=max_bytes,
                 backup_count=backup_count,
-                structured=structured,
             )
 
-        cls._loggers[name] = logger
+        cls._configured_loggers[cache_key] = logger
         return logger
 
     @classmethod
@@ -110,41 +120,49 @@ class PGMQLogger:
         if not LOGURU_AVAILABLE or not cls._use_loguru:
             return
 
-        ids_to_remove = list(cls._handler_ids)
+        ids_to_remove = list(cls._loguru_handler_ids)
         for handler_id in ids_to_remove:
             try:
                 loguru_logger.remove(handler_id)
-                cls._handler_ids.discard(handler_id)
+                cls._loguru_handler_ids.discard(handler_id)
             except Exception:
-                # Handler already removed or invalid; clean up tracking set
-                cls._handler_ids.discard(handler_id)
+                cls._loguru_handler_ids.discard(handler_id)
 
     @classmethod
-    def _get_standard_logger(
+    def _configure_stdlib(
         cls,
+        cache_key: str,
         name: str,
-        verbose: bool = False,
-        log_filename: Optional[str] = None,
-        log_format: Optional[str] = None,
-        log_level: Optional[int] = None,
-        enable_rotation: bool = False,
-        max_bytes: int = 10 * 1024 * 1024,
-        backup_count: int = 5,
-        structured: bool = False,
+        verbose: bool,
+        log_filename: Optional[str],
+        log_format: Optional[str],
+        log_level: Optional[Union[int, str]],
+        structured: bool,
+        enable_rotation: bool,
+        max_bytes: int,
+        backup_count: int,
     ) -> logging.Logger:
         """Configure and return a standard library Logger instance."""
-        logger = logging.getLogger(name)
+        logger = logging.getLogger(cache_key)
+        logger.name = name
 
+        # Return existing if already configured for this cache key
         if logger.handlers:
             return logger
 
+        # Set Level
         if log_level is not None:
-            logger.setLevel(log_level)
+            if isinstance(log_level, str):
+                level = getattr(logging, log_level.upper(), logging.WARNING)
+                logger.setLevel(level)
+            else:
+                logger.setLevel(log_level)
         elif verbose:
             logger.setLevel(logging.DEBUG)
         else:
             logger.setLevel(logging.WARNING)
 
+        # Set Format
         if log_format is None:
             if structured:
                 log_format = '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'
@@ -153,22 +171,22 @@ class PGMQLogger:
 
         formatter = logging.Formatter(log_format)
 
+        # Console Handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
+        # File Handler
         if verbose or log_filename:
-            if log_filename is None:
-                log_filename = datetime.now().strftime("pgmq_debug_%Y%m%d_%H%M%S.log")
-
-            log_path = os.path.join(os.getcwd(), log_filename)
+            filename = log_filename or datetime.now().strftime("pgmq_%Y%m%d_%H%M%S.log")
+            filepath = os.path.join(os.getcwd(), filename)
 
             if enable_rotation:
                 file_handler = logging.handlers.RotatingFileHandler(
-                    filename=log_path, maxBytes=max_bytes, backupCount=backup_count
+                    filepath, maxBytes=max_bytes, backupCount=backup_count
                 )
             else:
-                file_handler = logging.FileHandler(filename=log_path)
+                file_handler = logging.FileHandler(filepath)
 
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
@@ -176,25 +194,21 @@ class PGMQLogger:
         return logger
 
     @classmethod
-    def _get_loguru_logger(
+    def _configure_loguru(
         cls,
         name: str,
-        verbose: bool = False,
-        log_filename: Optional[str] = None,
-        log_format: Optional[str] = None,
-        log_level: Optional[Union[int, str]] = None,
-        structured: bool = False,
-        rotation: Optional[str] = None,
-        retention: Optional[str] = None,
-        compression: Optional[str] = None,
+        verbose: bool,
+        log_filename: Optional[str],
+        log_format: Optional[str],
+        log_level: Optional[Union[int, str]],
+        structured: bool,
+        rotation: Optional[str],
+        retention: Optional[str],
+        compression: Optional[str],
     ) -> Any:
         """
         Configure and return a loguru logger instance.
-
-        When verbose=False and no log_filename specified, returns a bound
-        logger without adding handlers to avoid polluting host application logs.
         """
-
         effective_level = "DEBUG" if verbose else "WARNING"
         if log_level is not None:
             if isinstance(log_level, int):
@@ -213,44 +227,45 @@ class PGMQLogger:
             if structured:
                 log_format = '{{"timestamp": "{time:YYYY-MM-DD HH:mm:ss.SSS}", "level": "{level}", "logger": "{extra[logger]}", "message": "{message}"}}'
             else:
-                # Omit {extra[logger]} to prevent KeyError when host app logs without context
                 log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 
         needs_custom_handler = bool(verbose or log_filename)
 
+        # FIX: Disable enqueue in test mode to ensure synchronous logging for assertions
+        should_enqueue = not cls._test_mode
+
         if needs_custom_handler:
+            # Remove previous handlers to avoid duplication in interactive sessions
             cls._remove_pgmq_handlers()
 
+            # Console Handler
             console_id = loguru_logger.add(
                 sys.stderr,
                 format=log_format,
                 level=effective_level,
-                enqueue=True,
+                enqueue=should_enqueue,  # Dynamic based on test mode
                 backtrace=True,
                 diagnose=True,
             )
-            cls._handler_ids.add(console_id)
+            cls._loguru_handler_ids.add(console_id)
 
-            if log_filename is None:
-                log_filename = datetime.now().strftime("pgmq_debug_%Y%m%d_%H%M%S.log")
+            # File Handler
+            if log_filename:
+                filepath = os.path.join(os.getcwd(), log_filename)
+                file_id = loguru_logger.add(
+                    filepath,
+                    format=log_format,
+                    level=effective_level,
+                    rotation=rotation or "10 MB",
+                    retention=retention or "1 week",
+                    compression=compression,
+                    enqueue=should_enqueue,
+                    backtrace=True,
+                    diagnose=True,
+                )
+                cls._loguru_handler_ids.add(file_id)
 
-            log_path = os.path.join(os.getcwd(), log_filename)
-
-            file_id = loguru_logger.add(
-                log_path,
-                format=log_format,
-                level=effective_level,
-                rotation=rotation or "10 MB",
-                retention=retention or "1 week",
-                compression=compression,
-                enqueue=True,
-                backtrace=True,
-                diagnose=True,
-            )
-            cls._handler_ids.add(file_id)
-
-        logger = loguru_logger.bind(logger=name)
-        return logger
+        return loguru_logger.bind(logger=name)
 
     @classmethod
     def configure_global_logging(
@@ -262,14 +277,6 @@ class PGMQLogger:
     ) -> None:
         """
         Apply global logging configuration across all PGMQ loggers.
-
-        Modifies class-level defaults and configures root handlers.
-
-        Args:
-            log_level: Default severity threshold for all loggers.
-            log_format: Default output format template.
-            structured: Enable JSON output for all loggers.
-            use_loguru: Force specific backend (None enables auto-detection).
         """
         cls._configured = True
 
@@ -279,9 +286,7 @@ class PGMQLogger:
         if cls._use_loguru:
             cls._remove_pgmq_handlers()
 
-            if log_level is None:
-                log_level = "INFO"
-            elif isinstance(log_level, int):
+            if isinstance(log_level, int):
                 level_map = {
                     logging.DEBUG: "DEBUG",
                     logging.INFO: "INFO",
@@ -295,30 +300,25 @@ class PGMQLogger:
                 if structured:
                     log_format = '{{"timestamp": "{time:YYYY-MM-DD HH:mm:ss.SSS}", "level": "{level}", "logger": "{extra[logger]}", "message": "{message}"}}'
                 else:
-                    # Also omit {extra[logger]} here to prevent KeyError in host applications
-                    # Users can override with custom log_format if they need logger names
                     log_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
 
             handler_id = loguru_logger.add(
-                sys.stderr, format=log_format, level=log_level, enqueue=True
+                sys.stderr,
+                format=log_format,
+                level=log_level,
+                enqueue=not cls._test_mode,
             )
-            cls._handler_ids.add(handler_id)
+            cls._loguru_handler_ids.add(handler_id)
         else:
             root_logger = logging.getLogger("pgmq")
             root_logger.setLevel(log_level)
-
-            if log_format is None:
-                if structured:
-                    log_format = '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'
-                else:
-                    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-            formatter = logging.Formatter(log_format)
-
             if not any(
                 isinstance(h, logging.StreamHandler) for h in root_logger.handlers
             ):
                 console_handler = logging.StreamHandler()
+                formatter = logging.Formatter(
+                    log_format or "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
                 console_handler.setFormatter(formatter)
                 root_logger.addHandler(console_handler)
 
@@ -332,17 +332,32 @@ class PGMQLogger:
     ) -> None:
         """
         Emit a log entry with structured context data.
-
-        Automatically adapts output format for active backend.
-
-        Args:
-            logger: Target logger instance.
-            level: Severity level (int for stdlib, str for loguru).
-            message: Primary log message content.
-            **context: Key-value pairs to include in log output.
+        Adapts automatically to logger type (logging.Logger vs loguru).
         """
-        if cls._use_loguru:
+        # Check if the passed logger is a standard library logger
+        is_stdlib = isinstance(logger, logging.Logger)
+
+        if is_stdlib:
+            # Standard Library Path
             if context:
+                context_str = " | ".join([f"{k}={v}" for k, v in context.items()])
+                message = f"{message} | {context_str}"
+
+            if isinstance(level, str):
+                level = getattr(logging, level.upper(), logging.INFO)
+
+            logger.log(level, message)
+        else:
+            # Loguru Path (or compatible logger)
+            # FIX: Ensure context appears in text logs, not just in structured ones.
+            # Loguru's bind() puts context in `extra`, but if the user is using
+            # the default text format, `extra` keys aren't listed unless explicitly
+            # formatted. By appending the context to the message string, we mirror
+            # the stdlib behavior where context is always visible.
+            if context:
+                context_str = " | ".join([f"{k}={v}" for k, v in context.items()])
+                message = f"{message} | {context_str}"
+                # We still bind to make it available in `extra` for structured loggers
                 logger = logger.bind(**context)
 
             if isinstance(level, int):
@@ -354,12 +369,6 @@ class PGMQLogger:
                     logging.CRITICAL: "CRITICAL",
                 }
                 level = level_map.get(level, "INFO")
-
-            logger.log(level, message)
-        else:
-            if context:
-                context_str = " | ".join([f"{k}={v}" for k, v in context.items()])
-                message = f"{message} | {context_str}"
 
             logger.log(level, message)
 
@@ -417,18 +426,24 @@ def create_logger(
 ) -> Union[logging.Logger, Any]:
     """
     Factory function for backward-compatible logger creation.
-
-    Simplified interface matching legacy PGMQueue API.
-
-    Args:
-        name: Logger identifier.
-        verbose: Enable debug output.
-        log_filename: Optional file output path.
-
-    Returns:
-        Configured logger instance.
     """
-    return PGMQLogger.get_logger(name=name, verbose=verbose, log_filename=log_filename)
+    return LoggingManager.get_logger(
+        name=name, verbose=verbose, log_filename=log_filename
+    )
+
+
+def log_with_context(
+    logger: Union[logging.Logger, Any],
+    level: Union[int, str],
+    message: str,
+    **context: Any,
+) -> None:
+    """
+    Emit log entry with structured context.
+
+    Automatically adapts to logger type (stdlib vs loguru).
+    """
+    LoggingManager.log_with_context(logger, level, message, **context)
 
 
 def log_performance(logger: Union[logging.Logger, Any]):
@@ -440,62 +455,73 @@ def log_performance(logger: Union[logging.Logger, Any]):
     """
 
     def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = func(*args, **kwargs)
-                elapsed = (time.time() - start_time) * 1000
-                PGMQLogger.log_with_context(
-                    logger,
-                    logging.DEBUG,
-                    f"Completed {func.__name__}",
-                    function=func.__name__,
-                    elapsed_ms=round(elapsed, 2),
-                    success=True,
-                )
-                return result
-            except Exception as e:
-                elapsed = (time.time() - start_time) * 1000
-                PGMQLogger.log_with_context(
-                    logger,
-                    logging.ERROR,
-                    f"Failed {func.__name__}: {str(e)}",
-                    function=func.__name__,
-                    elapsed_ms=round(elapsed, 2),
-                    success=False,
-                    error=str(e),
-                )
-                raise
+        is_async = inspect.iscoroutinefunction(func)
 
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = await func(*args, **kwargs)
-                elapsed = (time.time() - start_time) * 1000
-                PGMQLogger.log_with_context(
-                    logger,
-                    logging.DEBUG,
-                    f"Completed {func.__name__}",
-                    function=func.__name__,
-                    elapsed_ms=round(elapsed, 2),
-                    success=True,
-                )
-                return result
-            except Exception as e:
-                elapsed = (time.time() - start_time) * 1000
-                PGMQLogger.log_with_context(
-                    logger,
-                    logging.ERROR,
-                    f"Failed {func.__name__}: {str(e)}",
-                    function=func.__name__,
-                    elapsed_ms=round(elapsed, 2),
-                    success=False,
-                    error=str(e),
-                )
-                raise
+        if is_async:
 
-        return async_wrapper if asyncio.iscoroutinefunction(func) else wrapper
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                start = time.time()
+                try:
+                    result = await func(*args, **kwargs)
+                    elapsed = (time.time() - start) * 1000
+                    log_with_context(
+                        logger,
+                        logging.DEBUG,
+                        f"Completed {func.__name__}",
+                        function=func.__name__,
+                        elapsed_ms=round(elapsed, 2),
+                        success=True,
+                    )
+                    return result
+                except Exception as e:
+                    elapsed = (time.time() - start) * 1000
+                    log_with_context(
+                        logger,
+                        logging.ERROR,
+                        f"Failed {func.__name__}: {e}",
+                        function=func.__name__,
+                        elapsed_ms=round(elapsed, 2),
+                        success=False,
+                        error=str(e),
+                    )
+                    raise
+
+            return async_wrapper
+        else:
+
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                start = time.time()
+                try:
+                    result = func(*args, **kwargs)
+                    elapsed = (time.time() - start) * 1000
+                    log_with_context(
+                        logger,
+                        logging.DEBUG,
+                        f"Completed {func.__name__}",
+                        function=func.__name__,
+                        elapsed_ms=round(elapsed, 2),
+                        success=True,
+                    )
+                    return result
+                except Exception as e:
+                    elapsed = (time.time() - start) * 1000
+                    log_with_context(
+                        logger,
+                        logging.ERROR,
+                        f"Failed {func.__name__}: {e}",
+                        function=func.__name__,
+                        elapsed_ms=round(elapsed, 2),
+                        success=False,
+                        error=str(e),
+                    )
+                    raise
+
+            return sync_wrapper
 
     return decorator
+
+
+# Backward compatibility alias
+PGMQLogger = LoggingManager

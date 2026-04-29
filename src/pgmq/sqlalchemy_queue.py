@@ -1,9 +1,10 @@
-# src/pgmq/queue.py
+# src/pgmq/sqlalchemy_queue.py
 """
-Synchronous PGMQ client implementation.
+Synchronous PGMQ client implementation using SQLAlchemy.
 
-This module provides the main PGMQueue class for synchronous database operations,
-with full support for all PGMQ extension features including topics, FIFO, and notifications.
+This module provides the SQLAlchemyPGMQueue class for synchronous database operations
+using SQLAlchemy Core, with full support for all PGMQ extension features including
+topics, FIFO, and notifications.
 """
 
 from dataclasses import dataclass, field, fields
@@ -11,13 +12,15 @@ from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 import os
 import logging
+import urllib.parse
 import warnings
-from psycopg.types.json import Jsonb
-from psycopg_pool import ConnectionPool
+from sqlalchemy import create_engine, text, Engine
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import QueuePool
 
 from pgmq.base import BaseQueue
 from pgmq import _sql
-from pgmq.decorators import transaction
+from pgmq.decorators import sqlalchemy_transaction
 from pgmq.logger import log_with_context
 from pgmq.messages import (
     Message,
@@ -30,10 +33,18 @@ from pgmq.messages import (
 )
 
 
+def _parse_jsonb(val) -> Any:
+    """Parse JSONB value from SQLAlchemy/psycopg result."""
+    if val is None:
+        return None
+    # psycopg returns JSONB as dict/list directly
+    return val
+
+
 @dataclass
 class PGMQueue(BaseQueue):
     """
-    Synchronous PGMQueue client for PostgreSQL Message Queue operations.
+    Synchronous PGMQueue client using SQLAlchemy for PostgreSQL Message Queue operations.
     """
 
     # --- Backward Compatible Fields ---
@@ -56,33 +67,55 @@ class PGMQueue(BaseQueue):
     log_rotation_size: str = "10 MB"
     log_retention: str = "1 week"
 
-    # --- Internal Fields ---
-    pool: ConnectionPool = field(init=False, default=None)  # type: ignore
+    # --- SQLAlchemy Specific Fields ---
+    engine: Optional[Engine] = field(default=None)  # type: ignore
 
     def __post_init__(self):
-        """Initialize connection pool after dataclass construction."""
+        """Initialize configuration and engine after dataclass construction."""
         super().__init__(
             **{f.name: getattr(self, f.name) for f in fields(self.__class__)}
         )
-        self._init_pool()
-        if self.config.init_extension:
-            self._init_extensions()
+        if self.engine is None:
+            self._init_engine()
+            if self.config.init_extension:
+                self._init_extensions()
+        else:
+            # External engine provided — ensure it's the right type
+            if not isinstance(self.engine, Engine):
+                raise TypeError(
+                    f"Expected sqlalchemy.Engine, got {type(self.engine).__name__}"
+                )
+            if self.config.init_extension:
+                self._init_extensions()
+        self._session_factory = sessionmaker(bind=self.engine)
 
-    def _init_pool(self) -> None:
-        """Initialize the connection pool."""
-        log_with_context(self.logger, logging.DEBUG, "Creating connection pool")
-        dsn = self.config.conn_string if self.config.conn_string else self.config.dsn
-        self.pool = ConnectionPool(
-            dsn,
-            min_size=1,
-            max_size=self.config.pool_size,
-            open=True,
+    def _init_engine(self) -> None:
+        """Initialize the SQLAlchemy engine."""
+        log_with_context(self.logger, logging.DEBUG, "Creating SQLAlchemy engine")
+        if self.config.conn_string:
+            # If a full connection string is provided, use it directly
+            connection_url = self.config.conn_string
+        else:
+            # Otherwise, construct it from individual components
+            user = urllib.parse.quote_plus(self.config.username)
+            password = urllib.parse.quote_plus(self.config.password)
+            connection_url = (
+                f"postgresql+psycopg://{user}:{password}@"
+                f"{self.config.host}:{self.config.port}/{self.config.database}"
+            )
+        self.engine = create_engine(
+            connection_url,
+            poolclass=QueuePool,
+            pool_size=self.config.pool_size,
+            max_overflow=20,
+            pool_pre_ping=True,
         )
 
     def _init_extensions(self) -> None:
         """Ensure PGMQ extension is installed."""
-        with self.pool.connection() as conn:
-            conn.execute("CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;")
+        with self.engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;"))
+            conn.commit()
 
     # =========================================================================
     # Connection Management
@@ -90,21 +123,37 @@ class PGMQueue(BaseQueue):
 
     def _execute(self, sql: str, params: Optional[tuple] = None, conn=None) -> None:
         """Execute SQL without returning results."""
-        if conn:
-            conn.execute(sql, params)
+        converted_sql, param_dict = _sql.convert_sql_params(sql, params)
+
+        def run_query(connection):
+            if param_dict:
+                connection.execute(text(converted_sql), param_dict)
+            else:
+                connection.execute(text(converted_sql))
+
+        if conn is not None:
+            run_query(conn)
         else:
-            with self.pool.connection() as c:
-                c.execute(sql, params)
+            with self.engine.begin() as new_conn:
+                run_query(new_conn)
 
     def _execute_with_result(
         self, sql: str, params: Optional[tuple] = None, conn=None
     ) -> List[tuple]:
         """Execute SQL and return all results."""
-        if conn:
-            return conn.execute(sql, params).fetchall()
+        converted_sql, param_dict = _sql.convert_sql_params(sql, params)
+
+        def run_query(connection):
+            if param_dict:
+                return connection.execute(text(converted_sql), param_dict)
+            else:
+                return connection.execute(text(converted_sql))
+
+        if conn is not None:
+            return run_query(conn).fetchall()
         else:
-            with self.pool.connection() as c:
-                return c.execute(sql, params).fetchall()
+            with self.engine.begin() as new_conn:
+                return run_query(new_conn).fetchall()
 
     def _execute_one(
         self, sql: str, params: Optional[tuple] = None, conn=None
@@ -117,7 +166,7 @@ class PGMQueue(BaseQueue):
     # Queue Management
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def create_queue(self, queue: str, unlogged: bool = False, conn=None) -> None:
         """Create a new queue."""
         log_with_context(
@@ -126,7 +175,7 @@ class PGMQueue(BaseQueue):
         sql = _sql.CREATE_UNLOGGED_QUEUE if unlogged else _sql.CREATE_QUEUE
         self._execute(sql, (queue,), conn=conn)
 
-    @transaction
+    @sqlalchemy_transaction
     def create_partitioned_queue(
         self,
         queue: str,
@@ -149,7 +198,7 @@ class PGMQueue(BaseQueue):
             conn=conn,
         )
 
-    @transaction
+    @sqlalchemy_transaction
     def drop_queue(self, queue: str, conn=None) -> bool:
         """Drop a queue."""
         log_with_context(self.logger, logging.DEBUG, "Dropping queue", queue=queue)
@@ -188,7 +237,7 @@ class PGMQueue(BaseQueue):
     # Sending Messages
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def send(
         self,
         queue: str,
@@ -215,16 +264,16 @@ class PGMQueue(BaseQueue):
 
         sql = _sql.get_send_sql(has_headers, has_delay, delay_is_ts)
 
-        params: List[Any] = [queue, Jsonb(message)]
+        params: List[Any] = [queue, message]
         if has_headers:
-            params.append(Jsonb(headers))
+            params.append(headers)
         if has_delay:
             params.append(effective_delay)
 
         result = self._execute_one(sql, tuple(params), conn=conn)
         return result[0] if result else -1
 
-    @transaction
+    @sqlalchemy_transaction
     def send_batch(
         self,
         queue: str,
@@ -254,11 +303,10 @@ class PGMQueue(BaseQueue):
 
         sql = _sql.get_send_batch_sql(has_headers, has_delay, delay_is_ts)
 
-        jsonb_messages = [Jsonb(m) for m in messages]
-        params: List[Any] = [queue, jsonb_messages]
+        params: List[Any] = [queue, messages]
 
         if has_headers:
-            params.append([Jsonb(h) for h in headers])
+            params.append(headers)
         if has_delay:
             params.append(delay)
 
@@ -269,7 +317,7 @@ class PGMQueue(BaseQueue):
     # Topic-Based Routing
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def send_topic(
         self,
         routing_key: str,
@@ -292,16 +340,16 @@ class PGMQueue(BaseQueue):
 
         sql = _sql.get_send_topic_sql(has_headers, has_delay)
 
-        params: List[Any] = [routing_key, Jsonb(message)]
+        params: List[Any] = [routing_key, message]
         if has_headers:
-            params.append(Jsonb(headers))
+            params.append(headers)
         if has_delay:
             params.append(delay)
 
         result = self._execute_one(sql, tuple(params), conn=conn)
         return result[0] if result else 0
 
-    @transaction
+    @sqlalchemy_transaction
     def send_batch_topic(
         self,
         routing_key: str,
@@ -328,20 +376,19 @@ class PGMQueue(BaseQueue):
 
         sql = _sql.get_send_batch_topic_sql(has_headers, has_delay, delay_is_ts)
 
-        jsonb_messages = [Jsonb(m) for m in messages]
-        params: List[Any] = [routing_key, jsonb_messages]
+        params: List[Any] = [routing_key, messages]
 
         if has_headers:
             if len(headers) != len(messages):
                 raise ValueError("headers list must match messages list length")
-            params.append([Jsonb(h) for h in headers])
+            params.append(headers)
         if has_delay:
             params.append(delay)
 
         rows = self._execute_with_result(sql, tuple(params), conn=conn)
         return [BatchTopicResult.from_row(row) for row in rows]
 
-    @transaction
+    @sqlalchemy_transaction
     def bind_topic(self, pattern: str, queue_name: str, conn=None) -> None:
         """Bind a pattern to a queue for topic routing."""
         log_with_context(
@@ -353,7 +400,7 @@ class PGMQueue(BaseQueue):
         )
         self._execute(_sql.BIND_TOPIC, (pattern, queue_name), conn=conn)
 
-    @transaction
+    @sqlalchemy_transaction
     def unbind_topic(self, pattern: str, queue_name: str, conn=None) -> bool:
         """Remove a pattern binding from a queue."""
         log_with_context(
@@ -387,7 +434,7 @@ class PGMQueue(BaseQueue):
     # Reading Messages
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def read(
         self,
         queue: str,
@@ -410,19 +457,19 @@ class PGMQueue(BaseQueue):
 
         if conditional:
             sql = _sql.READ_CONDITIONAL
-            params = (queue, actual_vt, qty, Jsonb(conditional))
+            params = (queue, actual_vt, qty, conditional)
         else:
             sql = _sql.READ
             params = (queue, actual_vt, qty)
 
         rows = self._execute_with_result(sql, params, conn=conn)
-        messages = [Message.from_row(row, lambda x: x) for row in rows]
+        messages = [Message.from_row(row, _parse_jsonb) for row in rows]
 
         if qty == 1:
             return messages[0] if messages else None
         return messages
 
-    @transaction
+    @sqlalchemy_transaction
     def read_batch(
         self, queue: str, vt: Optional[int] = None, batch_size: int = 1, conn=None
     ) -> List[Message]:
@@ -434,7 +481,7 @@ class PGMQueue(BaseQueue):
             return result
         return [result]
 
-    @transaction
+    @sqlalchemy_transaction
     def read_with_poll(
         self,
         queue: str,
@@ -465,20 +512,20 @@ class PGMQueue(BaseQueue):
                 qty,
                 max_poll_seconds,
                 poll_interval_ms,
-                Jsonb(conditional),
+                conditional,
             )
         else:
             sql = _sql.READ_WITH_POLL
             params = (queue, actual_vt, qty, max_poll_seconds, poll_interval_ms)
 
         rows = self._execute_with_result(sql, params, conn=conn)
-        return [Message.from_row(row, lambda x: x) for row in rows]
+        return [Message.from_row(row, _parse_jsonb) for row in rows]
 
     # =========================================================================
     # FIFO Operations
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def read_grouped(
         self, queue: str, vt: Optional[int] = None, qty: int = 1, conn=None
     ) -> List[Message]:
@@ -492,9 +539,9 @@ class PGMQueue(BaseQueue):
         )
         params = (queue, vt or self.vt, qty)
         rows = self._execute_with_result(_sql.READ_GROUPED, params, conn=conn)
-        return [Message.from_row(row, lambda x: x) for row in rows]
+        return [Message.from_row(row, _parse_jsonb) for row in rows]
 
-    @transaction
+    @sqlalchemy_transaction
     def read_grouped_with_poll(
         self,
         queue: str,
@@ -514,9 +561,9 @@ class PGMQueue(BaseQueue):
         )
         params = (queue, vt or self.vt, qty, max_poll_seconds, poll_interval_ms)
         rows = self._execute_with_result(_sql.READ_GROUPED_WITH_POLL, params, conn=conn)
-        return [Message.from_row(row, lambda x: x) for row in rows]
+        return [Message.from_row(row, _parse_jsonb) for row in rows]
 
-    @transaction
+    @sqlalchemy_transaction
     def read_grouped_rr(
         self, queue: str, vt: Optional[int] = None, qty: int = 1, conn=None
     ) -> List[Message]:
@@ -530,9 +577,9 @@ class PGMQueue(BaseQueue):
         )
         params = (queue, vt or self.vt, qty)
         rows = self._execute_with_result(_sql.READ_GROUPED_RR, params, conn=conn)
-        return [Message.from_row(row, lambda x: x) for row in rows]
+        return [Message.from_row(row, _parse_jsonb) for row in rows]
 
-    @transaction
+    @sqlalchemy_transaction
     def read_grouped_rr_with_poll(
         self,
         queue: str,
@@ -554,13 +601,13 @@ class PGMQueue(BaseQueue):
         rows = self._execute_with_result(
             _sql.READ_GROUPED_RR_WITH_POLL, params, conn=conn
         )
-        return [Message.from_row(row, lambda x: x) for row in rows]
+        return [Message.from_row(row, _parse_jsonb) for row in rows]
 
     # =========================================================================
     # Pop (Read and Delete)
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def pop(
         self, queue: str, qty: int = 1, conn=None
     ) -> Optional[Union[Message, List[Message]]]:
@@ -569,7 +616,7 @@ class PGMQueue(BaseQueue):
             self.logger, logging.DEBUG, "Popping messages", queue=queue, qty=qty
         )
         rows = self._execute_with_result(_sql.POP, (queue, qty), conn=conn)
-        messages = [Message.from_row(row, lambda x: x) for row in rows]
+        messages = [Message.from_row(row, _parse_jsonb) for row in rows]
 
         if qty == 1:
             return messages[0] if messages else None
@@ -579,7 +626,7 @@ class PGMQueue(BaseQueue):
     # Deleting and Archiving
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def delete(self, queue: str, msg_id: int, conn=None) -> bool:
         """Delete a single message from queue."""
         log_with_context(
@@ -588,7 +635,7 @@ class PGMQueue(BaseQueue):
         result = self._execute_one(_sql.DELETE, (queue, msg_id), conn=conn)
         return result[0] if result else False
 
-    @transaction
+    @sqlalchemy_transaction
     def delete_batch(self, queue: str, msg_ids: List[int], conn=None) -> List[int]:
         """Delete multiple messages."""
         log_with_context(
@@ -601,7 +648,7 @@ class PGMQueue(BaseQueue):
         rows = self._execute_with_result(_sql.DELETE_BATCH, (queue, msg_ids), conn=conn)
         return [row[0] for row in rows]
 
-    @transaction
+    @sqlalchemy_transaction
     def archive(self, queue: str, msg_id: int, conn=None) -> bool:
         """Archive a single message."""
         log_with_context(
@@ -610,7 +657,7 @@ class PGMQueue(BaseQueue):
         result = self._execute_one(_sql.ARCHIVE, (queue, msg_id), conn=conn)
         return result[0] if result else False
 
-    @transaction
+    @sqlalchemy_transaction
     def archive_batch(self, queue: str, msg_ids: List[int], conn=None) -> List[int]:
         """Archive multiple messages."""
         log_with_context(
@@ -625,7 +672,7 @@ class PGMQueue(BaseQueue):
         )
         return [row[0] for row in rows]
 
-    @transaction
+    @sqlalchemy_transaction
     def purge(self, queue: str, conn=None) -> int:
         """Purge all messages from queue."""
         log_with_context(self.logger, logging.DEBUG, "Purging queue", queue=queue)
@@ -636,7 +683,7 @@ class PGMQueue(BaseQueue):
     # Visibility Timeout
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def set_vt(
         self,
         queue: str,
@@ -661,7 +708,7 @@ class PGMQueue(BaseQueue):
         params = (queue, msg_id, vt)
 
         rows = self._execute_with_result(sql, params, conn=conn)
-        messages = [Message.from_row(row, lambda x: x) for row in rows]
+        messages = [Message.from_row(row, _parse_jsonb) for row in rows]
 
         if is_batch:
             return messages
@@ -689,7 +736,7 @@ class PGMQueue(BaseQueue):
     # Notifications
     # =========================================================================
 
-    @transaction
+    @sqlalchemy_transaction
     def enable_notify(
         self, queue: str, throttle_interval_ms: int = 250, conn=None
     ) -> None:
@@ -703,7 +750,7 @@ class PGMQueue(BaseQueue):
         )
         self._execute(_sql.ENABLE_NOTIFY, (queue, throttle_interval_ms), conn=conn)
 
-    @transaction
+    @sqlalchemy_transaction
     def disable_notify(self, queue: str, conn=None) -> None:
         """Disable NOTIFY triggers for a queue."""
         log_with_context(
@@ -711,7 +758,7 @@ class PGMQueue(BaseQueue):
         )
         self._execute(_sql.DISABLE_NOTIFY, (queue,), conn=conn)
 
-    @transaction
+    @sqlalchemy_transaction
     def update_notify(self, queue: str, throttle_interval_ms: int, conn=None) -> None:
         """Update throttle interval for notifications."""
         log_with_context(
@@ -748,7 +795,7 @@ class PGMQueue(BaseQueue):
         except Exception:
             return False
 
-    @transaction
+    @sqlalchemy_transaction
     def create_fifo_index(self, queue: str, conn=None) -> None:
         """Create GIN index on headers for FIFO performance."""
         log_with_context(self.logger, logging.DEBUG, "Creating FIFO index", queue=queue)
@@ -759,7 +806,7 @@ class PGMQueue(BaseQueue):
         log_with_context(self.logger, logging.DEBUG, "Creating all FIFO indexes")
         self._execute(_sql.CREATE_FIFO_INDEXES_ALL, conn=conn)
 
-    @transaction
+    @sqlalchemy_transaction
     def convert_archive_partitioned(
         self,
         queue: str,
@@ -783,10 +830,27 @@ class PGMQueue(BaseQueue):
             conn=conn,
         )
 
-    @transaction
+    @sqlalchemy_transaction
     def detach_archive(self, queue: str, conn=None) -> None:
         """Detach archive table from extension (deprecated in PGMQ v2.0)."""
         log_with_context(
             self.logger, logging.DEBUG, "Detaching archive (deprecated)", queue=queue
         )
         self._execute(_sql.DETACH_ARCHIVE, (queue,), conn=conn)
+
+    def session(self) -> Session:
+        """Return a new SQLAlchemy ORM Session bound to this queue's engine."""
+        if self.engine is None:
+            raise RuntimeError("Engine has not been initialized.")
+        return self._session_factory()
+
+    def dispose(self) -> None:
+        """Dispose of the engine and close all connections.
+
+        Note: If you passed in an external engine, this will also dispose it.
+        You may want to skip calling this if the engine lifecycle is managed
+        elsewhere.
+        """
+        if self.engine:
+            self.engine.dispose()
+            self.engine = None
