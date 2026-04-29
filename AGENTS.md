@@ -65,7 +65,7 @@ example/
 benches/
   bench.py / runner.py / ... # Locust-based load testing (dependency-group "bench")
 
-doc/
+docs/
   index.md                    # Documentation homepage
   getting_started.md          # Installation & quick start
   configuration.md            # PGMQConfig reference
