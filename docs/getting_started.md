@@ -37,7 +37,7 @@ The fastest way to get started is with the pre-built Docker image, where PGMQ co
 docker run -d --name pgmq-postgres \
   -e POSTGRES_PASSWORD=postgres \
   -p 5432:5432 \
-  ghcr.io/pgmq/pg18-pgmq:v1.10.0
+  ghcr.io/pgmq/pg18-pgmq:latest
 ```
 
 Then connect and enable PGMQ:
