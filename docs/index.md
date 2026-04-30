@@ -4,6 +4,8 @@ Welcome to the official documentation for `pgmq`, the Python client library for 
 
 ## What is PGMQ?
 
+> A lightweight message queue. Like AWS SQS and RSMQ but on Postgres.
+
 PGMQ (Postgres Message Queue) is a message queue built on Postgres. It provides reliable, transactional message processing with the familiarity of SQL. The `pgmq` Python library exposes a clean, unified API for interacting with PGMQ across four different database backends.
 
 ## Key Features

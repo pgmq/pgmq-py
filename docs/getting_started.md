@@ -29,19 +29,31 @@ pip install pgmq[async,sqlalchemy,sqlalchemy-async]
 
 ## Start a Local Postgres with PGMQ
 
-The fastest way to get started is with Docker:
+### Docker (recommended)
+
+The fastest way to get started is with the pre-built Docker image, where PGMQ comes pre-installed as an extension in Postgres:
 
 ```bash
 docker run -d --name pgmq-postgres \
   -e POSTGRES_PASSWORD=postgres \
   -p 5432:5432 \
-  ghcr.io/pgmq/pg18-pgmq:latest
+  ghcr.io/pgmq/pg18-pgmq:v1.10.0
 ```
 
-Wait a few seconds for the database to be ready, then test connectivity:
+Then connect and enable PGMQ:
 
 ```bash
-psql postgresql://postgres:postgres@localhost:5432/postgres -c "SELECT pgmq.version();"
+psql postgres://postgres:postgres@localhost:5432/postgres -c "CREATE EXTENSION pgmq;"
+```
+
+### SQL Only
+
+You can also use `psql` to install PGMQ's objects directly into the `pgmq` schema in Postgres. Use this method if you are running someplace that does not natively support the PGMQ Extension.
+
+```bash
+git clone https://github.com/pgmq/pgmq.git
+cd pgmq
+psql -f pgmq-extension/sql/pgmq.sql postgres://postgres:postgres@localhost:5432/postgres
 ```
 
 ## Your First Queue
