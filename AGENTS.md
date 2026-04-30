@@ -26,6 +26,7 @@ This file contains project-specific context for AI coding agents. The project is
 | Lint / format | `ruff>=0.12.12` |
 | Logging | stdlib `logging` with optional `loguru` fallback |
 | Benchmarks | `locust`, `pandas`, `scipy`, `typer` |
+| Documentation | `mkdocs`, `mkdocs-material`, `mkdocstrings`, `mike` |
 
 ---
 
@@ -63,6 +64,28 @@ example/
 
 benches/
   bench.py / runner.py / ... # Locust-based load testing (dependency-group "bench")
+
+docs/
+  index.md                    # Documentation homepage
+  getting_started.md          # Installation & quick start
+  configuration.md            # PGMQConfig reference
+  clients.md                  # Four backend clients
+  queue_management.md         # Create, drop, list, purge queues
+  messages.md                 # Dataclasses (Message, QueueMetrics, ...)
+  sending_messages.md         # send, send_batch, headers, delay
+  reading_messages.md         # read, read_with_poll, FIFO variants
+  deleting_and_archiving.md   # delete, archive, pop, purge
+  visibility_timeout.md       # set_vt
+  topic_routing.md            # Topic-based routing
+  metrics.md                  # Queue statistics
+  notifications.md            # NOTIFY/LISTEN & listeners
+  transactions.md             # Decorators & manual transactions
+  logging.md                  # Logging configuration
+  utilities.md                # Validation, FIFO indexes
+  backward_compatibility.md   # Migration notes
+  development.md              # Tests, contributing, MkDocs/Mike
+
+mkdocs.yml                    # MkDocs configuration (Material theme, Mike versioning)
 ```
 
 ---
@@ -110,6 +133,22 @@ make run-pgmq-postgres
 
 # Tear it down
 make clear-postgres
+
+### Documentation
+
+```bash
+# Serve docs locally with live reload
+make docs-serve
+#  → uv run --group docs mkdocs serve
+
+# Build static site
+make docs-build
+#  → uv run --group docs mkdocs build
+
+# Deploy a versioned release (uses mike)
+make docs-deploy VERSION=1.1.0
+#  → uv run --group docs mike deploy 1.1.0 latest
+#  → uv run --group docs mike set-default latest
 ```
 
 ---
@@ -212,6 +251,17 @@ Row-to-object mapping uses `from_row(cls, row, json_parser=None)` classmethods. 
   2. `tests` — `make test` (requires Docker)
   3. `publish` — `uv build` + `uv publish` (only on `pgmq/pgmq-py` `main` branch, uses OIDC token)
 - Pre-commit hooks (`.pre-commit-config.yaml`) run `ruff` with `--fix` and `ruff-format`.
+
+### Documentation CI
+
+- Workflow file: `.github/workflows/docs.yml`
+- Triggers on push to `main` and on tags (`v*`).
+- Uses `mike` to deploy versioned documentation to the `gh-pages` branch.
+- Jobs:
+  1. Push to `main` — deploys as `main` version, updates `latest` alias.
+  2. Tag push (`v1.1.0`) — deploys as `1.1.0` version, updates `latest` alias.
+  3. Sets `latest` as the default version on every deploy.
+- GitHub Pages source must be set to the `gh-pages` branch (`/root`) in repo settings.
 
 ---
 

@@ -1,25 +1,26 @@
 [project]
 name = "pgmq"
-version = "1.0.6"
+version = "1.1.0"
 description = "Python client for the PGMQ Postgres extension."
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["pgmq", "postgres", "queue", "async", "messaging"]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 
+    "Topic :: Communications",
     "Topic :: Database",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Distributed Computing",
 ]
 
 authors = [
@@ -49,13 +50,20 @@ dev = [
     "pre-commit>=4.3.0",
     "ruff>=0.12.12",
 ]
+docs = [
+    "mike>=2.2.0",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings>=0.30.1",
+    "mkdocstrings-python>=1.18.2",
+]
 
 [project.urls]
 Homepage = "https://github.com/pgmq/pgmq"
 Repository = "https://github.com/pgmq/pgmq-py"
 Documentation = "https://github.com/pgmq/pgmq-py"
 "Bug Tracker" = "https://github.com/pgmq/pgmq-py/issues"
-Changelog = "https://github.com/pgmq/pgmq-py/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/pgmq/pgmq-py/releases"
 
 
 [build-system]

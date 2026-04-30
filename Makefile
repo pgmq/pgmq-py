@@ -1,7 +1,18 @@
 SCOPE=src/
 
-.PHONY: format lint test clear-postgres run-pgmq-postgres
+.PHONY: format lint test clear-postgres run-pgmq-postgres docs-serve docs-build docs-deploy
 
+
+docs-serve:
+	uv run --group docs mkdocs serve
+
+docs-build:
+	uv run --group docs mkdocs build
+
+docs-deploy:
+	@if [ -z "$(VERSION)" ]; then echo "VERSION is required, e.g. make docs-deploy VERSION=1.1.0"; exit 1; fi
+	uv run --group docs mike deploy $(VERSION) latest
+	uv run --group docs mike set-default latest
 
 format:
 	uv run ruff format $(SCOPE)
