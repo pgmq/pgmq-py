@@ -57,7 +57,8 @@ class PGMQueue(BaseQueue):
     log_retention: str = "1 week"
 
     # --- Internal Fields ---
-    pool: ConnectionPool = field(init=False, default=None)  # type: ignore
+    pool: Optional[ConnectionPool] = None
+    _own_pool: bool = field(init=False, default=True)
 
     def __post_init__(self):
         """Initialize connection pool after dataclass construction."""
@@ -70,6 +71,18 @@ class PGMQueue(BaseQueue):
 
     def _init_pool(self) -> None:
         """Initialize the connection pool."""
+        if self.pool is not None:
+            if not isinstance(self.pool, ConnectionPool):
+                raise TypeError(
+                    f"Expected psycopg_pool.ConnectionPool, got {type(self.pool).__name__}"
+                )
+            self._own_pool = False
+            log_with_context(
+                self.logger, logging.DEBUG, "Using user-provided connection pool"
+            )
+            return
+
+        self._own_pool = True
         log_with_context(self.logger, logging.DEBUG, "Creating connection pool")
         dsn = self.config.conn_string if self.config.conn_string else self.config.dsn
         self.pool = ConnectionPool(
@@ -78,6 +91,12 @@ class PGMQueue(BaseQueue):
             max_size=self.config.pool_size,
             open=True,
         )
+
+    def close(self) -> None:
+        """Close the connection pool if it was created by this client."""
+        if self.pool and self._own_pool:
+            self.pool.close()
+            self.pool = None
 
     def _init_extensions(self) -> None:
         """Ensure PGMQ extension is installed."""

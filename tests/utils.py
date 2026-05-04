@@ -36,8 +36,7 @@ class PGMQTestCase(unittest.TestCase):
             cls.queue.drop_queue(cls.test_queue)
         except:  # noqa: E722
             pass
-        if cls.queue.pool:
-            cls.queue.pool.close()
+        cls.queue.close()
 
     def setUp(self):
         # Purge before each test to ensure clean state

@@ -5,7 +5,7 @@
 ## Client Overview
 
 | Import Alias | Module | Backend | Transaction Decorator |
-|--------------|--------|---------|-----------------------|
+| -------------- | -------- | --------- | ----------------------- |
 | `PGMQueue` | `pgmq.queue` | `psycopg` + `ConnectionPool` | `@transaction` |
 | `SyncPGMQueue` | `pgmq.queue` | `psycopg` + `ConnectionPool` | `@transaction` |
 | `AsyncPGMQueue` | `pgmq.async_queue` | `asyncpg` + `Pool` | `@async_transaction` |
@@ -25,6 +25,24 @@ queue = PGMQueue()
 queue.create_queue("my_queue")
 ```
 
+### Using an External Connection Pool
+
+You can provide your own `psycopg_pool.ConnectionPool` instead of letting the client create one. This is useful when you want to share a pool across multiple queue instances or with other parts of your application.
+
+```python
+from pgmq import PGMQueue
+from psycopg_pool import ConnectionPool
+
+pool = ConnectionPool("host=localhost dbname=postgres user=postgres", open=True)
+queue = PGMQueue(pool=pool)
+
+queue.create_queue("my_queue")
+
+# The queue will NOT close a user-provided pool on shutdown.
+# You are responsible for closing it yourself when appropriate.
+pool.close()
+```
+
 ## Async asyncpg Client
 
 Requires an explicit `await queue.init()` before use. Remember to `await queue.close()` on shutdown.
@@ -39,6 +57,27 @@ await queue.create_queue("my_queue")
 msg_id = await queue.send("my_queue", {"hello": "world"})
 
 await queue.close()
+```
+
+### Using an External Connection Pool (ASYNC)
+
+You can inject an existing `asyncpg.Pool`. The queue will use it for all operations but will **not** close it when `queue.close()` is called.
+
+```python
+from pgmq import AsyncPGMQueue
+import asyncpg
+
+pool = await asyncpg.create_pool("postgresql://postgres:postgres@localhost/postgres")
+queue = AsyncPGMQueue(pool=pool)
+await queue.init()
+
+await queue.create_queue("my_queue")
+
+# queue.close() is safe — it will leave your external pool open.
+await queue.close()
+
+# Close the pool yourself when the application shuts down.
+await pool.close()
 ```
 
 ## Sync SQLAlchemy Client
@@ -99,7 +138,7 @@ await queue.close()
 ## Choosing a Backend
 
 | Use Case | Recommended Client |
-|----------|--------------------|
+| ---------- | -------------------- |
 | Simple sync scripts | `PGMQueue` (psycopg) |
 | High-throughput async services | `AsyncPGMQueue` (asyncpg) |
 | Existing SQLAlchemy application | `SQLAlchemyPGMQueue` or `SQLAlchemyAsyncPGMQueue` |

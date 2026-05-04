@@ -67,7 +67,8 @@ class PGMQueue(BaseQueue):
     log_retention: str = "1 week"
 
     # --- Internal Fields ---
-    pool: Optional[Pool] = field(init=False, default=None)
+    pool: Optional[Pool] = None
+    _own_pool: bool = field(init=False, default=True)
 
     def __post_init__(self) -> None:
         """Initialize configuration after dataclass construction."""
@@ -77,6 +78,21 @@ class PGMQueue(BaseQueue):
 
     async def init(self) -> None:
         """Initialize the asyncpg connection pool."""
+        if self.pool is not None:
+            if not isinstance(self.pool, Pool):
+                raise TypeError(
+                    f"Expected asyncpg.Pool, got {type(self.pool).__name__}"
+                )
+            self._own_pool = False
+            log_with_context(
+                self.logger, logging.DEBUG, "Using user-provided connection pool"
+            )
+            if self.config.init_extension:
+                async with self.pool.acquire() as conn:
+                    await conn.execute("CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;")
+            return
+
+        self._own_pool = True
         log_with_context(self.logger, logging.DEBUG, "Creating asyncpg pool")
         dsn = (
             self.config.conn_string
@@ -94,8 +110,8 @@ class PGMQueue(BaseQueue):
                 await conn.execute("CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;")
 
     async def close(self) -> None:
-        """Close the connection pool."""
-        if self.pool:
+        """Close the connection pool if it was created by this client."""
+        if self.pool and self._own_pool:
             await self.pool.close()
             self.pool = None
 

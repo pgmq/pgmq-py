@@ -76,6 +76,28 @@ class TestSyncQueue(PGMQTestCase):
         self.assertEqual(len(read_messages), 2)
         self.assertIsNone(self.queue.read(self.test_queue))
 
+    def test_external_pool(self):
+        """Test passing an external psycopg pool to the queue."""
+        from psycopg_pool import ConnectionPool
+
+        dsn = (
+            f"host={PG_HOST} port={PG_PORT} dbname={PG_DATABASE} "
+            f"user={PG_USERNAME} password={PG_PASSWORD}"
+        )
+        pool = ConnectionPool(dsn, open=True)
+        try:
+            queue = PGMQueue(pool=pool, init_extension=False)
+            self.assertIs(queue.pool, pool)
+            self.assertFalse(queue._own_pool)
+
+            test_queue = self.get_queue_name("extpool")
+            queue.create_queue(test_queue)
+            msg_id = queue.send(test_queue, {"test": "external_pool"})
+            self.assertGreater(msg_id, 0)
+            queue.drop_queue(test_queue)
+        finally:
+            pool.close()
+
     def test_pop_message(self):
         msg_id = self.queue.send(self.test_queue, self.test_message)
         message = self.queue.pop(self.test_queue)
