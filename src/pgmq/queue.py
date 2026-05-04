@@ -96,8 +96,9 @@ class PGMQueue(BaseQueue):
 
     def close(self) -> None:
         """Close the connection pool if it was created by this client."""
-        if self.pool and self._own_pool:
-            self.pool.close()
+        if self.pool:
+            if self._own_pool:
+                self.pool.close()
             self.pool = None
 
     def _init_extensions(self) -> None:

@@ -115,8 +115,9 @@ class PGMQueue(BaseQueue):
 
     async def close(self) -> None:
         """Close the connection pool if it was created by this client."""
-        if self.pool and self._own_pool:
-            await self.pool.close()
+        if self.pool:
+            if self._own_pool:
+                await self.pool.close()
             self.pool = None
 
     # =========================================================================
