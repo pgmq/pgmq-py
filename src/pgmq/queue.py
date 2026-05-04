@@ -65,6 +65,8 @@ class PGMQueue(BaseQueue):
         super().__init__(
             **{f.name: getattr(self, f.name) for f in fields(self.__class__)}
         )
+        if self.pool is not None:
+            self._own_pool = False
         self._init_pool()
         if self.config.init_extension:
             self._init_extensions()
@@ -72,14 +74,14 @@ class PGMQueue(BaseQueue):
     def _init_pool(self) -> None:
         """Initialize the connection pool."""
         if self.pool is not None:
-            if not isinstance(self.pool, ConnectionPool):
-                raise TypeError(
-                    f"Expected psycopg_pool.ConnectionPool, got {type(self.pool).__name__}"
+            if not self._own_pool:
+                if not isinstance(self.pool, ConnectionPool):
+                    raise TypeError(
+                        f"Expected psycopg_pool.ConnectionPool, got {type(self.pool).__name__}"
+                    )
+                log_with_context(
+                    self.logger, logging.DEBUG, "Using user-provided connection pool"
                 )
-            self._own_pool = False
-            log_with_context(
-                self.logger, logging.DEBUG, "Using user-provided connection pool"
-            )
             return
 
         self._own_pool = True

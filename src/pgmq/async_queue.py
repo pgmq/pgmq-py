@@ -75,21 +75,25 @@ class PGMQueue(BaseQueue):
         super().__init__(
             **{f.name: getattr(self, f.name) for f in fields(self.__class__)}
         )
+        if self.pool is not None:
+            self._own_pool = False
 
     async def init(self) -> None:
         """Initialize the asyncpg connection pool."""
         if self.pool is not None:
-            if not isinstance(self.pool, Pool):
-                raise TypeError(
-                    f"Expected asyncpg.Pool, got {type(self.pool).__name__}"
+            if not self._own_pool:
+                if not isinstance(self.pool, Pool):
+                    raise TypeError(
+                        f"Expected asyncpg.Pool, got {type(self.pool).__name__}"
+                    )
+                log_with_context(
+                    self.logger, logging.DEBUG, "Using user-provided connection pool"
                 )
-            self._own_pool = False
-            log_with_context(
-                self.logger, logging.DEBUG, "Using user-provided connection pool"
-            )
-            if self.config.init_extension:
-                async with self.pool.acquire() as conn:
-                    await conn.execute("CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;")
+                if self.config.init_extension:
+                    async with self.pool.acquire() as conn:
+                        await conn.execute(
+                            "CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;"
+                        )
             return
 
         self._own_pool = True
