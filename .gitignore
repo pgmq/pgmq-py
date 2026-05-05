@@ -308,6 +308,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.bck
 .envrc
 .venv
 env/
