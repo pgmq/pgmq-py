@@ -12,7 +12,6 @@ from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 import os
 import logging
-import urllib.parse
 import warnings
 from sqlalchemy import create_engine, text, Engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -92,17 +91,11 @@ class PGMQueue(BaseQueue):
     def _init_engine(self) -> None:
         """Initialize the SQLAlchemy engine."""
         log_with_context(self.logger, logging.DEBUG, "Creating SQLAlchemy engine")
-        if self.config.conn_string:
-            # If a full connection string is provided, use it directly
-            connection_url = self.config.conn_string
-        else:
-            # Otherwise, construct it from individual components
-            user = urllib.parse.quote_plus(self.config.username)
-            password = urllib.parse.quote_plus(self.config.password)
-            connection_url = (
-                f"postgresql+psycopg://{user}:{password}@"
-                f"{self.config.host}:{self.config.port}/{self.config.database}"
-            )
+        # Use the re-assembled and quoted URI from config, swapping the driver prefix.
+        # This handles both URI and libpq input formats and fixes malformed credentials.
+        connection_url = self.config.async_dsn.replace(
+            "postgresql://", "postgresql+psycopg://", 1
+        )
         self.engine = create_engine(
             connection_url,
             poolclass=QueuePool,

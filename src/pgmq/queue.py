@@ -71,9 +71,10 @@ class PGMQueue(BaseQueue):
     def _init_pool(self) -> None:
         """Initialize the connection pool."""
         log_with_context(self.logger, logging.DEBUG, "Creating connection pool")
-        dsn = self.config.conn_string if self.config.conn_string else self.config.dsn
+        # Always use the re-assembled libpq DSN so that malformed URIs
+        # (e.g. passwords containing unescaped @ or /) are corrected.
         self.pool = ConnectionPool(
-            dsn,
+            self.config.dsn,
             min_size=1,
             max_size=self.config.pool_size,
             open=True,

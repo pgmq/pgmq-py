@@ -7,21 +7,31 @@ from unittest.mock import patch, AsyncMock
 
 from pgmq.async_queue import PGMQueue as AsyncPGMQueue
 from pgmq.decorators import async_transaction
-from tests.utils import PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
+from tests.utils import (
+    PG_HOST,
+    PG_PORT,
+    PG_DATABASE,
+    PG_USERNAME,
+    PG_PASSWORD,
+    DATABASE_URL,
+)
 
 
 class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):
     """Comprehensive Async Tests (Merged test_async_queue.py & test_async_integration.py)."""
 
     async def asyncSetUp(self):
-        self.queue = AsyncPGMQueue(
-            host=PG_HOST,
-            port=PG_PORT,
-            database=PG_DATABASE,
-            username=PG_USERNAME,
-            password=PG_PASSWORD,
-            verbose=False,
-        )
+        if DATABASE_URL:
+            self.queue = AsyncPGMQueue(conn_string=DATABASE_URL, verbose=False)
+        else:
+            self.queue = AsyncPGMQueue(
+                host=PG_HOST,
+                port=PG_PORT,
+                database=PG_DATABASE,
+                username=PG_USERNAME,
+                password=PG_PASSWORD,
+                verbose=False,
+            )
         await self.queue.init()
         self.test_queue = "async_test_queue"
         self.test_message = {"hello": "async"}
@@ -204,14 +214,17 @@ class TestAsyncInitNoExtension(unittest.IsolatedAsyncioTestCase):
             mock_conn = AsyncMock()
             mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-            q = AsyncPGMQueue(
-                host=PG_HOST,
-                port=PG_PORT,
-                database=PG_DATABASE,
-                username=PG_USERNAME,
-                password=PG_PASSWORD,
-                init_extension=False,
-            )
+            if DATABASE_URL:
+                q = AsyncPGMQueue(conn_string=DATABASE_URL, init_extension=False)
+            else:
+                q = AsyncPGMQueue(
+                    host=PG_HOST,
+                    port=PG_PORT,
+                    database=PG_DATABASE,
+                    username=PG_USERNAME,
+                    password=PG_PASSWORD,
+                    init_extension=False,
+                )
 
             await q.init()
 

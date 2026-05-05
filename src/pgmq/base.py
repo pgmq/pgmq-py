@@ -70,23 +70,49 @@ class PGMQConfig:
         Supports:
         - URI: postgresql://user:pass@host:port/database
         - Libpq: host=localhost port=5432 dbname=database user=postgres password=postgres
+
+        For URIs, this uses a libpq-compatible parser that splits the netloc on
+        the *last* ``@`` (so passwords containing ``@`` work) and tolerates
+        unescaped ``/`` or ``+`` inside the password.
         """
         # URI Format
         if "://" in conn_string:
             try:
+                # Try standard urlparse first
                 parsed = urllib.parse.urlparse(conn_string)
 
-                if parsed.hostname:
-                    self.host = parsed.hostname
-                if parsed.port:
-                    self.port = str(parsed.port)
-                if parsed.path and len(parsed.path) > 1:
-                    # path is usually '/dbname', slice off the leading '/'
-                    self.database = parsed.path[1:]
-                if parsed.username:
-                    self.username = parsed.username
-                if parsed.password:
-                    self.password = parsed.password
+                # Mimic libpq: split on the LAST @ to handle passwords containing @
+                scheme, rest = conn_string.split("://", 1)
+                if "@" in rest:
+                    userinfo, hostpath = rest.rsplit("@", 1)
+                    if ":" in userinfo:
+                        self.username, self.password = userinfo.split(":", 1)
+                    else:
+                        self.username = userinfo
+
+                    self.username = urllib.parse.unquote(self.username)
+                    if self.password:
+                        self.password = urllib.parse.unquote(self.password)
+                else:
+                    hostpath = rest
+
+                # Parse hostpath (host:port/database?options)
+                # Prepend a dummy scheme to use urlparse safely on the remaining part
+                hp_parsed = urllib.parse.urlparse("http://" + hostpath)
+                if hp_parsed.hostname:
+                    self.host = hp_parsed.hostname
+                if hp_parsed.port:
+                    self.port = str(hp_parsed.port)
+                if hp_parsed.path and len(hp_parsed.path) > 1:
+                    # path is '/dbname', slice off the leading '/'
+                    self.database = urllib.parse.unquote(hp_parsed.path[1:])
+
+                # If urlparse gave us userinfo that we didn't extract above,
+                # prefer the rsplit result (handles passwords with @)
+                if not self.username and parsed.username is not None:
+                    self.username = urllib.parse.unquote(parsed.username)
+                if not self.password and parsed.password is not None:
+                    self.password = urllib.parse.unquote(parsed.password)
 
             except Exception as e:
                 raise ValueError(f"Failed to parse connection URI: {e}")

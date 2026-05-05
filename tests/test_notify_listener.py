@@ -10,7 +10,14 @@ from pgmq.async_queue import PGMQueue as AsyncPGMQueue
 from pgmq.sqlalchemy_queue import PGMQueue as SQLAlchemyPGMQueue
 from pgmq.sqlalchemy_async_queue import PGMQueue as AsyncSQLAlchemyPGMQueue
 from pgmq.notify_listener import SyncNotificationListener, AsyncNotificationListener
-from tests.utils import PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD
+from tests.utils import (
+    PG_HOST,
+    PG_PORT,
+    PG_DATABASE,
+    PG_USERNAME,
+    PG_PASSWORD,
+    DATABASE_URL,
+)
 
 
 # =============================================================================
@@ -22,14 +29,17 @@ class TestSyncNotificationListener(unittest.TestCase):
     """Test the synchronous notification listener with the raw psycopg queue."""
 
     def setUp(self):
-        self.queue = PGMQueue(
-            host=PG_HOST,
-            port=PG_PORT,
-            database=PG_DATABASE,
-            username=PG_USERNAME,
-            password=PG_PASSWORD,
-            verbose=False,
-        )
+        if DATABASE_URL:
+            self.queue = PGMQueue(conn_string=DATABASE_URL, verbose=False)
+        else:
+            self.queue = PGMQueue(
+                host=PG_HOST,
+                port=PG_PORT,
+                database=PG_DATABASE,
+                username=PG_USERNAME,
+                password=PG_PASSWORD,
+                verbose=False,
+            )
         self.queue_name = "test_sync_notify"
         try:
             self.queue.create_queue(self.queue_name)
@@ -163,14 +173,17 @@ class TestSyncNotificationListenerSQLAlchemy(unittest.TestCase):
     """Test SyncNotificationListener with the SQLAlchemy-backed sync queue."""
 
     def setUp(self):
-        self.queue = SQLAlchemyPGMQueue(
-            host=PG_HOST,
-            port=PG_PORT,
-            database=PG_DATABASE,
-            username=PG_USERNAME,
-            password=PG_PASSWORD,
-            verbose=False,
-        )
+        if DATABASE_URL:
+            self.queue = SQLAlchemyPGMQueue(conn_string=DATABASE_URL, verbose=False)
+        else:
+            self.queue = SQLAlchemyPGMQueue(
+                host=PG_HOST,
+                port=PG_PORT,
+                database=PG_DATABASE,
+                username=PG_USERNAME,
+                password=PG_PASSWORD,
+                verbose=False,
+            )
         self.queue_name = "test_sync_sqlalchemy_notify"
         try:
             self.queue.create_queue(self.queue_name)
@@ -232,14 +245,17 @@ class TestAsyncNotificationListener(unittest.IsolatedAsyncioTestCase):
     """Test the asynchronous notification listener with the raw asyncpg queue."""
 
     async def asyncSetUp(self):
-        self.queue = AsyncPGMQueue(
-            host=PG_HOST,
-            port=PG_PORT,
-            database=PG_DATABASE,
-            username=PG_USERNAME,
-            password=PG_PASSWORD,
-            verbose=False,
-        )
+        if DATABASE_URL:
+            self.queue = AsyncPGMQueue(conn_string=DATABASE_URL, verbose=False)
+        else:
+            self.queue = AsyncPGMQueue(
+                host=PG_HOST,
+                port=PG_PORT,
+                database=PG_DATABASE,
+                username=PG_USERNAME,
+                password=PG_PASSWORD,
+                verbose=False,
+            )
         await self.queue.init()
         self.queue_name = "test_async_notify"
 
@@ -372,14 +388,19 @@ class TestAsyncNotificationListenerSQLAlchemy(unittest.IsolatedAsyncioTestCase):
     """Test AsyncNotificationListener with the SQLAlchemy-backed async queue."""
 
     async def asyncSetUp(self):
-        self.queue = AsyncSQLAlchemyPGMQueue(
-            host=PG_HOST,
-            port=PG_PORT,
-            database=PG_DATABASE,
-            username=PG_USERNAME,
-            password=PG_PASSWORD,
-            verbose=False,
-        )
+        if DATABASE_URL:
+            self.queue = AsyncSQLAlchemyPGMQueue(
+                conn_string=DATABASE_URL, verbose=False
+            )
+        else:
+            self.queue = AsyncSQLAlchemyPGMQueue(
+                host=PG_HOST,
+                port=PG_PORT,
+                database=PG_DATABASE,
+                username=PG_USERNAME,
+                password=PG_PASSWORD,
+                verbose=False,
+            )
         await self.queue.init()
         self.queue_name = "test_async_sqlalchemy_notify"
 
