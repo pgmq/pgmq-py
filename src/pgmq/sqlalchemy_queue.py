@@ -93,8 +93,18 @@ class PGMQueue(BaseQueue):
         """Initialize the SQLAlchemy engine."""
         log_with_context(self.logger, logging.DEBUG, "Creating SQLAlchemy engine")
         if self.config.conn_string:
-            # If a full connection string is provided, use it directly
-            connection_url = self.config.conn_string
+            # If a full connection string is provided, rewrite the driver
+            # prefix so SQLAlchemy uses psycopg (v3) instead of defaulting
+            # to the missing psycopg2.
+            raw = self.config.conn_string
+            if raw.startswith("postgresql://"):
+                connection_url = raw.replace(
+                    "postgresql://", "postgresql+psycopg://", 1
+                )
+            elif raw.startswith("postgres://"):
+                connection_url = raw.replace("postgres://", "postgresql+psycopg://", 1)
+            else:
+                connection_url = raw
         else:
             # Otherwise, construct it from individual components
             user = urllib.parse.quote_plus(self.config.username)

@@ -98,8 +98,18 @@ class PGMQueue(BaseQueue):
 
         log_with_context(self.logger, logging.DEBUG, "Creating async SQLAlchemy engine")
         if self.config.conn_string:
-            # If a full connection string is provided, use it directly
-            connection_url = self.config.conn_string
+            # If a full connection string is provided, rewrite the driver
+            # prefix so SQLAlchemy uses asyncpg instead of defaulting
+            # to the missing psycopg2.
+            raw = self.config.conn_string
+            if raw.startswith("postgresql://"):
+                connection_url = raw.replace(
+                    "postgresql://", "postgresql+asyncpg://", 1
+                )
+            elif raw.startswith("postgres://"):
+                connection_url = raw.replace("postgres://", "postgresql+asyncpg://", 1)
+            else:
+                connection_url = raw
         else:
             # Otherwise, construct it from individual components
             user = urllib.parse.quote_plus(self.config.username)

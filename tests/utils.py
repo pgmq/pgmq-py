@@ -1,15 +1,19 @@
 # tests/utils.py
-import os
 import unittest
 import uuid
 from pgmq import PGMQueue
+from pgmq.base import PGMQConfig
 
-# Configuration matches docker-compose setup
-PG_HOST = os.getenv("PG_HOST", "localhost")
-PG_PORT = os.getenv("PG_PORT", "5432")
-PG_DATABASE = os.getenv("PG_DATABASE", "postgres")
-PG_USERNAME = os.getenv("PG_USERNAME", "postgres")
-PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
+# Use the library's own config class so DATABASE_URL and PG_* env vars
+# are handled exactly like the production code.
+_config = PGMQConfig()
+
+PG_HOST = _config.host
+PG_PORT = _config.port
+PG_DATABASE = _config.database
+PG_USERNAME = _config.username
+PG_PASSWORD = _config.password
+DATABASE_URL = _config.conn_string
 
 
 class PGMQTestCase(unittest.TestCase):
@@ -36,8 +40,7 @@ class PGMQTestCase(unittest.TestCase):
             cls.queue.drop_queue(cls.test_queue)
         except:  # noqa: E722
             pass
-        if cls.queue.pool:
-            cls.queue.pool.close()
+        cls.queue.close()
 
     def setUp(self):
         # Purge before each test to ensure clean state

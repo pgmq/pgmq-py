@@ -14,18 +14,30 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from pgmq.sqlalchemy_async_queue import PGMQueue as AsyncSQLAlchemyQueue
 from pgmq.messages import Message, QueueMetrics
+from tests.utils import (
+    PG_HOST,
+    PG_PORT,
+    PG_DATABASE,
+    PG_USERNAME,
+    PG_PASSWORD,
+    DATABASE_URL,
+)
 
 # ============================================================================
 # Test Configuration
 # ============================================================================
 
-PGMQ_TEST_CONFIG = {
-    "host": "localhost",
-    "port": "5432",
-    "username": "postgres",
-    "password": "postgres",
-    "database": "postgres",
-}
+PGMQ_TEST_CONFIG = (
+    {"conn_string": DATABASE_URL}
+    if DATABASE_URL
+    else {
+        "host": PG_HOST,
+        "port": PG_PORT,
+        "username": PG_USERNAME,
+        "password": PG_PASSWORD,
+        "database": PG_DATABASE,
+    }
+)
 
 # Functions not available in older PGMQ versions (e.g., 1.10.0)
 _TOPIC_FUNCTIONS = {"pgmq.bind_topic", "pgmq.send_topic", "pgmq.send_batch_topic"}
@@ -144,11 +156,11 @@ class TestAsyncSQLAlchemyQueue(unittest.IsolatedAsyncioTestCase):
     def test_async_session_raises_without_engine(self):
         """session() should raise RuntimeError if engine is None."""
         queue = AsyncSQLAlchemyQueue(
-            host="localhost",
-            port="5432",
-            username="postgres",
-            password="postgres",
-            database="postgres",
+            host=PG_HOST,
+            port=PG_PORT,
+            username=PG_USERNAME,
+            password=PG_PASSWORD,
+            database=PG_DATABASE,
             init_extension=False,
         )
         queue.engine = None

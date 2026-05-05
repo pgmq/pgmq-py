@@ -19,14 +19,21 @@ from pgmq.messages import (
 
 # Client classes (default psycopg-based)
 from pgmq.queue import PGMQueue as SyncPGMQueue
-from pgmq.async_queue import PGMQueue as AsyncPGMQueue
+
+try:
+    from pgmq.async_queue import PGMQueue as AsyncPGMQueue
+except ImportError:  # pragma: no cover
+    AsyncPGMQueue = None  # type: ignore[misc, assignment]
 
 # SQLAlchemy-based clients (available when sqlalchemy is installed)
 try:
     from pgmq.sqlalchemy_queue import PGMQueue as SQLAlchemyPGMQueue
-    from pgmq.sqlalchemy_async_queue import PGMQueue as SQLAlchemyAsyncPGMQueue
 except ImportError:  # pragma: no cover
     SQLAlchemyPGMQueue = None  # type: ignore[misc, assignment]
+
+try:
+    from pgmq.sqlalchemy_async_queue import PGMQueue as SQLAlchemyAsyncPGMQueue
+except ImportError:  # pragma: no cover
     SQLAlchemyAsyncPGMQueue = None  # type: ignore[misc, assignment]
 
 # Decorators

@@ -78,13 +78,10 @@ class PGMQueue(BaseQueue):
     async def init(self) -> None:
         """Initialize the asyncpg connection pool."""
         log_with_context(self.logger, logging.DEBUG, "Creating asyncpg pool")
-        dsn = (
-            self.config.conn_string
-            if self.config.conn_string
-            else self.config.async_dsn
-        )
+        # Always use the re-encoded URI so that malformed original URIs
+        # (e.g. passwords containing unescaped @ or /) are corrected.
         self.pool = await asyncpg.create_pool(
-            dsn,
+            self.config.async_dsn,
             min_size=1,
             max_size=self.config.pool_size,
         )
