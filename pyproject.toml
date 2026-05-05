@@ -30,7 +30,6 @@ authors = [
 dependencies = [
     "orjson>=3.11.3",
     "psycopg[binary,pool]>=3.2.10",
-    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]

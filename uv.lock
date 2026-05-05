@@ -1387,7 +1387,6 @@ source = { editable = "." }
 dependencies = [
     { name = "orjson" },
     { name = "psycopg", extra = ["binary", "pool"] },
-    { name = "python-dotenv" },
 ]
 
 [package.optional-dependencies]
@@ -1431,7 +1430,6 @@ requires-dist = [
     { name = "asyncpg", marker = "extra == 'sqlalchemy-async'", specifier = ">=0.30.0" },
     { name = "orjson", specifier = ">=3.11.3" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.10" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "sqlalchemy", marker = "extra == 'sqlalchemy'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'sqlalchemy-async'", specifier = ">=2.0.0" },
 ]
