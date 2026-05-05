@@ -78,95 +78,40 @@ class PGMQConfig:
         # URI Format
         if "://" in conn_string:
             try:
-                # Try standard urlparse first — if it yields a sensible hostname
-                # we can use it directly.
+                # Try standard urlparse first
                 parsed = urllib.parse.urlparse(conn_string)
-                if (
-                    parsed.hostname
-                    and "." in parsed.hostname
-                    and "*" not in parsed.hostname
-                    and "+" not in parsed.hostname
-                ):
-                    self.host = parsed.hostname
-                    if parsed.port:
-                        self.port = str(parsed.port)
-                    if parsed.path and len(parsed.path) > 1:
-                        self.database = urllib.parse.unquote(parsed.path[1:])
-                    if parsed.username is not None:
-                        self.username = urllib.parse.unquote(parsed.username)
-                    if parsed.password is not None:
-                        self.password = urllib.parse.unquote(parsed.password)
-                    return
 
-                # Standard urlparse choked (e.g. password contains @ or /).
-                # Mimic libpq: split on the LAST @ that precedes a real hostname.
+                # Mimic libpq: split on the LAST @ to handle passwords containing @
                 scheme, rest = conn_string.split("://", 1)
-                parts = rest.split("@")
-
-                for i in range(len(parts) - 1, 0, -1):
-                    candidate = parts[i]
-
-                    # Extract host:port from candidate
-                    if ":" in candidate:
-                        last_colon = candidate.rindex(":")
-                        host_part = candidate[:last_colon]
-                        port_and_path = candidate[last_colon + 1 :]
-                        if port_and_path and port_and_path[0].isdigit():
-                            port_end = 0
-                            while (
-                                port_end < len(port_and_path)
-                                and port_and_path[port_end].isdigit()
-                            ):
-                                port_end += 1
-                            port = port_and_path[:port_end]
-                            path = port_and_path[port_end:]
-                        else:
-                            host_part = candidate
-                            port = None
-                            path = ""
+                if "@" in rest:
+                    userinfo, hostpath = rest.rsplit("@", 1)
+                    if ":" in userinfo:
+                        self.username, self.password = userinfo.split(":", 1)
                     else:
-                        host_part = candidate
-                        port = None
-                        path = ""
+                        self.username = userinfo
 
-                    # Sanity-check: a real hostname should contain a dot and no wildcards
-                    if (
-                        "." in host_part
-                        and "*" not in host_part
-                        and "+" not in host_part
-                    ):
-                        self.host = host_part
-                        if port:
-                            self.port = port
-
-                        # Everything before the split point is userinfo (may contain :)
-                        userinfo = "@".join(parts[:i])
-                        if ":" in userinfo:
-                            self.username, self.password = userinfo.split(":", 1)
-                        else:
-                            self.username = userinfo
-
-                        self.username = urllib.parse.unquote(self.username)
+                    self.username = urllib.parse.unquote(self.username)
+                    if self.password:
                         self.password = urllib.parse.unquote(self.password)
+                else:
+                    hostpath = rest
 
-                        if path.startswith("/"):
-                            path = path[1:]
-                            if "?" in path:
-                                path = path[: path.index("?")]
-                            if path:
-                                self.database = urllib.parse.unquote(path)
-                        return
+                # Parse hostpath (host:port/database?options)
+                # Prepend a dummy scheme to use urlparse safely on the remaining part
+                hp_parsed = urllib.parse.urlparse("http://" + hostpath)
+                if hp_parsed.hostname:
+                    self.host = hp_parsed.hostname
+                if hp_parsed.port:
+                    self.port = str(hp_parsed.port)
+                if hp_parsed.path and len(hp_parsed.path) > 1:
+                    # path is '/dbname', slice off the leading '/'
+                    self.database = urllib.parse.unquote(hp_parsed.path[1:])
 
-                # Final fallback — use whatever urlparse gave us
-                if parsed.hostname:
-                    self.host = parsed.hostname
-                if parsed.port:
-                    self.port = str(parsed.port)
-                if parsed.path and len(parsed.path) > 1:
-                    self.database = urllib.parse.unquote(parsed.path[1:])
-                if parsed.username is not None:
+                # If urlparse gave us userinfo that we didn't extract above,
+                # prefer the rsplit result (handles passwords with @)
+                if not self.username and parsed.username is not None:
                     self.username = urllib.parse.unquote(parsed.username)
-                if parsed.password is not None:
+                if not self.password and parsed.password is not None:
                     self.password = urllib.parse.unquote(parsed.password)
 
             except Exception as e:
