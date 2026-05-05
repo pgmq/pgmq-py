@@ -11,7 +11,6 @@ from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 import os
 import logging
-import urllib.parse
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, async_sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlalchemy import text
@@ -97,27 +96,11 @@ class PGMQueue(BaseQueue):
             return
 
         log_with_context(self.logger, logging.DEBUG, "Creating async SQLAlchemy engine")
-        if self.config.conn_string:
-            # If a full connection string is provided, rewrite the driver
-            # prefix so SQLAlchemy uses asyncpg instead of defaulting
-            # to the missing psycopg2.
-            raw = self.config.conn_string
-            if raw.startswith("postgresql://"):
-                connection_url = raw.replace(
-                    "postgresql://", "postgresql+asyncpg://", 1
-                )
-            elif raw.startswith("postgres://"):
-                connection_url = raw.replace("postgres://", "postgresql+asyncpg://", 1)
-            else:
-                connection_url = raw
-        else:
-            # Otherwise, construct it from individual components
-            user = urllib.parse.quote_plus(self.config.username)
-            password = urllib.parse.quote_plus(self.config.password)
-            connection_url = (
-                f"postgresql+asyncpg://{user}:{password}@"
-                f"{self.config.host}:{self.config.port}/{self.config.database}"
-            )
+        # Use the re-assembled and quoted URI from config, swapping the driver prefix.
+        # This handles both URI and libpq input formats and fixes malformed credentials.
+        connection_url = self.config.async_dsn.replace(
+            "postgresql://", "postgresql+asyncpg://", 1
+        )
         self.engine = create_async_engine(
             connection_url,
             poolclass=AsyncAdaptedQueuePool,

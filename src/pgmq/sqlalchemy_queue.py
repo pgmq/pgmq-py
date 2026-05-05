@@ -12,7 +12,6 @@ from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 import os
 import logging
-import urllib.parse
 import warnings
 from sqlalchemy import create_engine, text, Engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -92,27 +91,11 @@ class PGMQueue(BaseQueue):
     def _init_engine(self) -> None:
         """Initialize the SQLAlchemy engine."""
         log_with_context(self.logger, logging.DEBUG, "Creating SQLAlchemy engine")
-        if self.config.conn_string:
-            # If a full connection string is provided, rewrite the driver
-            # prefix so SQLAlchemy uses psycopg (v3) instead of defaulting
-            # to the missing psycopg2.
-            raw = self.config.conn_string
-            if raw.startswith("postgresql://"):
-                connection_url = raw.replace(
-                    "postgresql://", "postgresql+psycopg://", 1
-                )
-            elif raw.startswith("postgres://"):
-                connection_url = raw.replace("postgres://", "postgresql+psycopg://", 1)
-            else:
-                connection_url = raw
-        else:
-            # Otherwise, construct it from individual components
-            user = urllib.parse.quote_plus(self.config.username)
-            password = urllib.parse.quote_plus(self.config.password)
-            connection_url = (
-                f"postgresql+psycopg://{user}:{password}@"
-                f"{self.config.host}:{self.config.port}/{self.config.database}"
-            )
+        # Use the re-assembled and quoted URI from config, swapping the driver prefix.
+        # This handles both URI and libpq input formats and fixes malformed credentials.
+        connection_url = self.config.async_dsn.replace(
+            "postgresql://", "postgresql+psycopg://", 1
+        )
         self.engine = create_engine(
             connection_url,
             poolclass=QueuePool,
