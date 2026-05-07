@@ -57,7 +57,7 @@ cd pgmq
 psql -f pgmq-extension/sql/pgmq.sql postgres://postgres:postgres@localhost:5432/postgres
 ```
 
-In these enviroments, automatic extension initialization can be disabled by setting `init_extension=False`
+In these environments, automatic extension initialization can be disabled by setting `init_extension=False`
 when creating the client instance.
 
 Example:
