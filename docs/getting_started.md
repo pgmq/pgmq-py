@@ -48,13 +48,40 @@ psql postgres://postgres:postgres@localhost:5432/postgres -c "CREATE EXTENSION p
 
 ### SQL Only
 
-You can also use `psql` to install PGMQ's objects directly into the `pgmq` schema in Postgres. Use this method if you are running someplace that does not natively support the PGMQ Extension.
+You can also use `psql` to install PGMQ's objects directly into the `pgmq` schema in Postgres. 
+Use this method in environments that do not natively support the PGMQ extension or where extension management is handled manually.
 
 ```bash
 git clone https://github.com/pgmq/pgmq.git
 cd pgmq
 psql -f pgmq-extension/sql/pgmq.sql postgres://postgres:postgres@localhost:5432/postgres
 ```
+
+In these environments, automatic extension initialization can be disabled by setting `init_extension=False`
+when creating the client instance.
+
+Example:
+
+```python
+from pgmq import PGMQueue
+
+client = PGMQueue(
+    host=host,
+    port=port,
+    username=username,
+    password=password,
+    database=database,
+    init_extension=False
+)
+```
+
+When `init_extension=False` is set, the client will not attempt to run:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgmq CASCADE;
+```
+
+This option is supported by both sync and async clients.
 
 ## Your First Queue
 
