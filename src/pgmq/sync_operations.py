@@ -6,7 +6,7 @@ All public queue methods live here once. Backend clients inherit this mixin
 and only implement connection execution (_execute*) and JSON encoding.
 """
 
-from typing import Optional, List, Dict, Any, Union, Callable
+from typing import Optional, List, Dict, Any, Union, Callable, Tuple
 from datetime import datetime
 import logging
 import warnings
@@ -598,12 +598,12 @@ class SyncPGMQueueOperationsMixin:
     def set_vt(
         self,
         queue: str,
-        msg_id: Union[int, List[int]],
+        msg_id: Union[int, List[int], Tuple[int, ...]],
         vt: Union[int, datetime],
         conn=None,
     ) -> Optional[Union[Message, List[Message]]]:
         """Set visibility timeout for message(s)."""
-        is_batch = isinstance(msg_id, list)
+        is_batch = isinstance(msg_id, (list, tuple))
         vt_is_timestamp = isinstance(vt, datetime)
 
         log_with_context(
