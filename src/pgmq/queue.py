@@ -39,10 +39,6 @@ class PsycopgSyncBackend:
         """Initialize the connection pool."""
         if self.pool is not None:
             if not self._own_pool:
-                if not isinstance(self.pool, ConnectionPool):
-                    raise TypeError(
-                        f"Expected psycopg_pool.ConnectionPool, got {type(self.pool).__name__}"
-                    )
                 log_with_context(
                     self.logger, logging.DEBUG, "Using user-provided connection pool"
                 )
@@ -59,7 +55,7 @@ class PsycopgSyncBackend:
 
     def close(self) -> None:
         """Close the connection pool if it was created by this client."""
-        if self.pool:
+        if self.pool is not None:
             if self._own_pool:
                 self.pool.close()
             self.pool = None
@@ -107,7 +103,7 @@ class PGMQueue(
     """
 
     pool: Optional[ConnectionPool] = None
-    _own_pool: bool = field(init=False, default=True)
+    _own_pool: bool = field(init=False, default=True, repr=False, compare=False)
 
     def __post_init__(self):
         """Initialize connection pool after dataclass construction."""
