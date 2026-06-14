@@ -2,6 +2,7 @@
 import unittest
 import asyncio
 import os
+import uuid
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, AsyncMock
 
@@ -197,6 +198,48 @@ class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):
             self.test_queue, qty=1, max_poll_seconds=1
         )
         self.assertIsInstance(msgs_poll, list)
+
+    async def test_external_pool(self):
+        """Test passing an external asyncpg pool to the queue."""
+        import asyncpg
+
+        dsn = (
+            f"postgresql://{PG_USERNAME}:{PG_PASSWORD}@"
+            f"{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+        )
+        pool = await asyncpg.create_pool(dsn)
+        try:
+            queue = AsyncPGMQueue(pool=pool, init_extension=False)
+            await queue.init()
+            self.assertIs(queue.pool, pool)
+            self.assertFalse(queue._own_pool)
+
+            test_queue = f"async_extpool_{uuid.uuid4().hex[:8]}"
+            await queue.create_queue(test_queue)
+            msg_id = await queue.send(test_queue, {"test": "external_pool"})
+            self.assertGreater(msg_id, 0)
+            await queue.drop_queue(test_queue)
+        finally:
+            await pool.close()
+
+    async def test_external_pool_not_closed_by_queue(self):
+        """Queue.close() should not close a user-provided pool."""
+        import asyncpg
+
+        dsn = (
+            f"postgresql://{PG_USERNAME}:{PG_PASSWORD}@"
+            f"{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+        )
+        pool = await asyncpg.create_pool(dsn)
+        queue = AsyncPGMQueue(pool=pool, init_extension=False)
+        await queue.init()
+        await queue.close()
+
+        async with pool.acquire() as conn:
+            result = await conn.fetchval("SELECT 1")
+            self.assertEqual(result, 1)
+
+        await pool.close()
 
 
 class TestAsyncInitNoExtension(unittest.IsolatedAsyncioTestCase):
