@@ -2,74 +2,74 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/backward_compatibility/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/clients/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/configuration/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/deleting_and_archiving/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/development/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/getting_started/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/logging/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/messages/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/metrics/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/notifications/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/queue_management/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/reading_messages/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/sending_messages/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/topic_routing/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/transactions/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/utilities/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
     <url>
          <loc>https://pgmq.github.io/pgmq-py/main/visibility_timeout/</loc>
-         <lastmod>2026-06-14</lastmod>
+         <lastmod>2026-06-15</lastmod>
     </url>
 </urlset>
