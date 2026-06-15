@@ -37,6 +37,14 @@ class PsycopgSyncBackend:
 
     def _init_pool(self) -> None:
         """Initialize the connection pool."""
+        if self.pool is not None:
+            if not self._own_pool:
+                log_with_context(
+                    self.logger, logging.DEBUG, "Using user-provided connection pool"
+                )
+            return
+
+        self._own_pool = True
         log_with_context(self.logger, logging.DEBUG, "Creating connection pool")
         self.pool = ConnectionPool(
             self.config.dsn,
@@ -44,6 +52,13 @@ class PsycopgSyncBackend:
             max_size=self.config.pool_size,
             open=True,
         )
+
+    def close(self) -> None:
+        """Close the connection pool if it was created by this client."""
+        if self.pool is not None:
+            if self._own_pool:
+                self.pool.close()
+            self.pool = None
 
     def _init_extensions(self) -> None:
         """Ensure PGMQ extension is installed."""
@@ -87,7 +102,8 @@ class PGMQueue(
     Synchronous PGMQueue client for PostgreSQL Message Queue operations.
     """
 
-    pool: ConnectionPool = field(init=False, default=None)  # type: ignore
+    pool: Optional[ConnectionPool] = None
+    _own_pool: bool = field(init=False, default=True, repr=False, compare=False)
 
     def __post_init__(self):
         """Initialize connection pool after dataclass construction."""
@@ -95,6 +111,8 @@ class PGMQueue(
             self,
             **{f.name: getattr(self, f.name) for f in fields(PGMQueueClientFields)},
         )
+        if self.pool is not None:
+            self._own_pool = False
         self._init_pool()
         if self.config.init_extension:
             self._init_extensions()
