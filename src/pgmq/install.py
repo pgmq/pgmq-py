@@ -120,7 +120,8 @@ def _resolve_config(
             raise ValueError("Cannot combine config with dsn or connection kwargs")
         return config
     if dsn is not None:
-        return PGMQConfig(conn_string=dsn)
+        merged = {**(config_kwargs or {}), "conn_string": dsn}
+        return PGMQConfig(**merged)
     if config_kwargs:
         return PGMQConfig(**config_kwargs)
     return PGMQConfig()

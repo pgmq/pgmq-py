@@ -13,6 +13,7 @@ from pgmq import PGMQueue
 from pgmq.base import PGMQConfig
 from pgmq.install import (
     PGMQInstallError,
+    _resolve_config,
     build_install_sql_url,
     get_install_sql,
     get_latest_release_tag,
@@ -163,6 +164,28 @@ class TestBuildInstallSqlUrl(unittest.TestCase):
             "https://raw.githubusercontent.com/pgmq/pgmq/"
             "eb182e23d71543ba9f0a304fb2865f8b8cc18ae7/pgmq-extension/sql/pgmq.sql",
         )
+
+
+class TestResolveConfig(unittest.TestCase):
+    def test_dsn_merges_config_kwargs(self):
+        config = _resolve_config(
+            dsn=(
+                "host=localhost port=5432 dbname=postgres "
+                "user=postgres password=postgres"
+            ),
+            config_kwargs={"verbose": True, "pool_size": 5},
+        )
+        self.assertTrue(config.verbose)
+        self.assertEqual(config.pool_size, 5)
+        self.assertEqual(config.host, "localhost")
+        self.assertEqual(config.database, "postgres")
+
+    def test_dsn_takes_precedence_over_conn_string_in_config_kwargs(self):
+        config = _resolve_config(
+            dsn="host=sqlhost port=5432 dbname=postgres user=postgres password=secret",
+            config_kwargs={"conn_string": "host=ignored port=5432 dbname=ignored"},
+        )
+        self.assertEqual(config.host, "sqlhost")
 
 
 class TestInstallFetch(unittest.TestCase):
