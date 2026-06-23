@@ -30,6 +30,8 @@ jobs:
       PG_PASSWORD: postgres
       PG_DATABASE: postgres
       PG_INIT_EXTENSION: "false"
+      PG_SQL_INSTALL_HOST: localhost
+      PG_SQL_INSTALL_PORT: "5432"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -58,5 +60,5 @@ jobs:
           "
       - name: Install PGMQ from SQL
         run: make install-pgmq-sql
-      - name: Full test suite against SQL-installed PGMQ
-        run: make test-sql-env
+      - name: SQL install tests
+        run: make test-sql-install-env

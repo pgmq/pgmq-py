@@ -1,6 +1,12 @@
 SCOPE=src/
 
-.PHONY: format lint test test-env test-sql-env install-pgmq-sql clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
+.PHONY: format lint test test-env test-sql-install-env install-pgmq-sql clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
+
+PG_SQL_INSTALL_HOST ?= localhost
+PG_SQL_INSTALL_PORT ?= 5433
+PG_SQL_INSTALL_DATABASE ?= postgres
+PG_SQL_INSTALL_USERNAME ?= postgres
+PG_SQL_INSTALL_PASSWORD ?= postgres
 
 
 docs-serve:
@@ -37,12 +43,21 @@ run-plain-postgres:
 test: clear-postgres clear-plain-postgres run-pgmq-postgres run-plain-postgres
 	sleep 10  # Give PostgreSQL time to start
 	$(MAKE) test-env
+	$(MAKE) test-sql-install-env
 
 test-env:
 	uv run python -m unittest discover -s tests -p "test_*.py"
 
-test-sql-env:
-	PG_INIT_EXTENSION=false uv run python -m unittest discover -s tests -p "test_*.py"
+test-sql-install-env:
+	PG_SQL_INSTALL_HOST=$(PG_SQL_INSTALL_HOST) \
+	PG_SQL_INSTALL_PORT=$(PG_SQL_INSTALL_PORT) \
+	uv run python -m unittest tests.test_install -v
 
 install-pgmq-sql:
+	PG_HOST=$(PG_SQL_INSTALL_HOST) \
+	PG_PORT=$(PG_SQL_INSTALL_PORT) \
+	PG_DATABASE=$(PG_SQL_INSTALL_DATABASE) \
+	PG_USERNAME=$(PG_SQL_INSTALL_USERNAME) \
+	PG_PASSWORD=$(PG_SQL_INSTALL_PASSWORD) \
+	DATABASE_URL= \
 	uv run python -c "from pgmq import install_pgmq_from_sql; install_pgmq_from_sql()"

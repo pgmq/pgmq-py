@@ -24,7 +24,7 @@ This command:
 2. Starts a fresh PGMQ-enabled Postgres container on port `5432`.
 3. Starts a plain Postgres container (no PGMQ extension) on port `5433` for SQL install tests.
 4. Waits for them to be ready.
-5. Runs the full test suite.
+5. Runs the full test suite, including SQL install tests against plain Postgres on port `5433`.
 
 ### Manual
 
@@ -44,19 +44,21 @@ export PG_PASSWORD=postgres
 export PG_DATABASE=postgres
 ```
 
-### SQL-only install test suite
+### SQL-only install tests
 
-Run the full suite against a plain Postgres instance with PGMQ installed from SQL:
+Run SQL install tests against plain Postgres (defaults to `localhost:5433`):
 
 ```bash
 make run-plain-postgres
 sleep 10
 make install-pgmq-sql
-PG_PORT=5433 make test-sql-env
+make test-sql-install-env
 ```
 
-CI runs this path in the `SQL install tests` workflow (`.github/workflows/sql_install_tests.yml`).
-Set `PG_INIT_EXTENSION=false` so clients skip `CREATE EXTENSION`.
+`make install-pgmq-sql` and `make test-sql-install-env` both target plain Postgres
+via `PG_SQL_INSTALL_*` variables (see [SQL Installation](sql_installation.md)).
+
+CI also runs this path in `.github/workflows/sql_install_tests.yml`.
 
 ## Docker Helpers
 
