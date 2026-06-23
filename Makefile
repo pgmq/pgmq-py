@@ -1,6 +1,6 @@
 SCOPE=src/
 
-.PHONY: format lint test clear-postgres run-pgmq-postgres docs-serve docs-build docs-deploy
+.PHONY: format lint test test-env test-sql-env install-pgmq-sql clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
 
 
 docs-serve:
@@ -28,9 +28,21 @@ clear-postgres:
 run-pgmq-postgres:
 	docker run -d --name pgmq-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 ghcr.io/pgmq/pg18-pgmq:latest
 
-test: clear-postgres run-pgmq-postgres
+clear-plain-postgres:
+	docker rm -f pgmq-plain-postgres || true
+
+run-plain-postgres:
+	docker run -d --name pgmq-plain-postgres -e POSTGRES_PASSWORD=postgres -p 5433:5432 postgres:18
+
+test: clear-postgres clear-plain-postgres run-pgmq-postgres run-plain-postgres
 	sleep 10  # Give PostgreSQL time to start
-	uv run python -m unittest discover -s tests -p "test_*.py"
+	$(MAKE) test-env
 
 test-env:
 	uv run python -m unittest discover -s tests -p "test_*.py"
+
+test-sql-env:
+	PG_INIT_EXTENSION=false uv run python -m unittest discover -s tests -p "test_*.py"
+
+install-pgmq-sql:
+	uv run python -c "from pgmq import install_pgmq_from_sql; install_pgmq_from_sql(version='$(or $(PGMQ_SQL_VERSION),1.11.1)')"

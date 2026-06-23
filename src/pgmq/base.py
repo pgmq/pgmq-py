@@ -13,6 +13,14 @@ from pgmq.logger import LoggingManager, log_with_context
 from psycopg.conninfo import conninfo_to_dict
 
 
+def _env_bool(name: str, default: bool = True) -> bool:
+    """Parse a boolean environment variable."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in ("1", "true", "yes")
+
+
 @dataclass
 class PGMQConfig:
     """
@@ -44,7 +52,9 @@ class PGMQConfig:
     log_rotation: bool = False
     log_rotation_size: str = "10 MB"
     log_retention: str = "1 week"
-    init_extension: bool = True
+    init_extension: bool = field(
+        default_factory=lambda: _env_bool("PG_INIT_EXTENSION", True)
+    )
 
     def __post_init__(self) -> None:
         """Validate and normalize configuration."""

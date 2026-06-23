@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 import os
 
+from pgmq.base import _env_bool
+
 
 @dataclass
 class PGMQueueClientFields:
@@ -28,7 +30,9 @@ class PGMQueueClientFields:
     pool_size: int = 10
     verbose: bool = False
     log_filename: Optional[str] = None
-    init_extension: bool = True
+    init_extension: bool = field(
+        default_factory=lambda: _env_bool("PG_INIT_EXTENSION", True)
+    )
     structured_logging: bool = False
     log_rotation: bool = False
     log_rotation_size: str = "10 MB"

@@ -47,6 +47,17 @@ from pgmq.decorators import (
 # Logging utilities
 from pgmq.logger import PGMQLogger, create_logger, log_performance
 
+# SQL installation utilities
+from pgmq.install import (
+    PGMQInstallError,
+    build_install_sql_url,
+    get_install_sql,
+    get_latest_release_tag,
+    install_pgmq_from_sql,
+    install_pgmq_from_sql_async,
+    install_pgmq_sql,
+)
+
 # Backward compatibility: PGMQueue points to sync version
 PGMQueue = SyncPGMQueue
 
@@ -80,6 +91,14 @@ __all__ = [
     "PGMQLogger",
     "create_logger",
     "log_performance",
+    # SQL installation
+    "PGMQInstallError",
+    "build_install_sql_url",
+    "get_install_sql",
+    "get_latest_release_tag",
+    "install_pgmq_from_sql",
+    "install_pgmq_from_sql_async",
+    "install_pgmq_sql",
     # Version
     "__version__",
 ]

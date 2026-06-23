@@ -20,17 +20,18 @@ make test
 ```
 
 This command:
-1. Tears down any existing `pgmq-postgres` container.
-2. Starts a fresh PGMQ-enabled Postgres container.
-3. Waits for it to be ready.
-4. Runs the full test suite.
+1. Tears down any existing `pgmq-postgres` and `pgmq-plain-postgres` containers.
+2. Starts a fresh PGMQ-enabled Postgres container on port `5432`.
+3. Starts a plain Postgres container (no PGMQ extension) on port `5433` for SQL install tests.
+4. Waits for them to be ready.
+5. Runs the full test suite.
 
 ### Manual
 
 If you already have PGMQ installed:
 
 ```bash
-uv run python -m unittest discover -s tests -p "test_*.py"
+make test-env
 ```
 
 Override connection parameters with environment variables:
@@ -43,14 +44,32 @@ export PG_PASSWORD=postgres
 export PG_DATABASE=postgres
 ```
 
+### SQL-only install test suite
+
+Run the full suite against a plain Postgres instance with PGMQ installed from SQL:
+
+```bash
+make run-plain-postgres
+sleep 10
+make install-pgmq-sql
+PG_PORT=5433 make test-sql-env
+```
+
+CI runs this path in the `SQL install tests` workflow (`.github/workflows/sql_install_tests.yml`).
+Set `PG_INIT_EXTENSION=false` so clients skip `CREATE EXTENSION`.
+
 ## Docker Helpers
 
 ```bash
 # Start a local PGMQ-enabled Postgres
 make run-pgmq-postgres
 
-# Tear it down
+# Start plain Postgres for SQL-only install tests
+make run-plain-postgres
+
+# Tear them down
 make clear-postgres
+make clear-plain-postgres
 ```
 
 ## Lint and Format

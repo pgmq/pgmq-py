@@ -1,0 +1,63 @@
+name: SQL install tests
+
+on:
+  workflow_call:
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./
+
+jobs:
+  sql-install-tests:
+    runs-on: ubuntu-latest
+    services:
+      plain-postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PG_HOST: localhost
+      PG_PORT: "5432"
+      PG_USERNAME: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: postgres
+      PG_INIT_EXTENSION: "false"
+      PGMQ_SQL_VERSION: "1.11.1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+      - name: Install Python 3.13
+        run: uv python install 3.13
+      - name: Install project
+        run: uv sync --all-groups --all-extras
+      - name: Verify PGMQ extension is not pre-installed
+        run: |
+          uv run python -c "
+          import psycopg
+          conn = psycopg.connect(
+              'host=localhost port=5432 dbname=postgres user=postgres password=postgres',
+              autocommit=True,
+          )
+          installed = conn.execute(
+              \"SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgmq')\"
+          ).fetchone()[0]
+          conn.close()
+          if installed:
+              raise SystemExit('pgmq extension must not be installed on plain Postgres image')
+          "
+      - name: Install PGMQ from SQL
+        run: make install-pgmq-sql
+      - name: Full test suite against SQL-installed PGMQ
+        run: make test-sql-env
