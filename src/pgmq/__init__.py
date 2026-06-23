@@ -55,13 +55,6 @@ from pgmq.install import (
     install_pgmq_from_sql,
     install_pgmq_sql,
 )
-# Disabled for now:
-# build_install_sql_url,
-# get_install_sql,
-# get_latest_release_tag,
-# install_pgmq_from_github,
-# install_pgmq_from_github_async,
-# install_pgmq_from_sql_async,
 
 # Backward compatibility: PGMQueue points to sync version
 PGMQueue = SyncPGMQueue
