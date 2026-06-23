@@ -30,7 +30,6 @@ jobs:
       PG_PASSWORD: postgres
       PG_DATABASE: postgres
       PG_INIT_EXTENSION: "false"
-      PGMQ_SQL_VERSION: "1.11.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v5

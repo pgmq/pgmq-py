@@ -45,4 +45,4 @@ test-sql-env:
 	PG_INIT_EXTENSION=false uv run python -m unittest discover -s tests -p "test_*.py"
 
 install-pgmq-sql:
-	uv run python -c "from pgmq import install_pgmq_from_sql; install_pgmq_from_sql(version='$(or $(PGMQ_SQL_VERSION),1.11.1)')"
+	uv run python -c "from pgmq import install_pgmq_from_sql; install_pgmq_from_sql()"

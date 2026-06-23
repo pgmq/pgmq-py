@@ -64,7 +64,7 @@ cd pgmq
 psql -f pgmq-extension/sql/pgmq.sql postgres://postgres:postgres@localhost:5432/postgres
 ```
 
-Or install from Python:
+Or install from Python using the bundled SQL script:
 
 ```python
 from pgmq import install_pgmq_from_sql

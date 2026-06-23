@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.9 or newer.
+- Python 3.10 or newer.
 - A running PostgreSQL instance with the [PGMQ extension](https://github.com/pgmq/pgmq) installed.
 
 ## Installation
@@ -57,12 +57,11 @@ cd pgmq
 psql -f pgmq-extension/sql/pgmq.sql postgres://postgres:postgres@localhost:5432/postgres
 ```
 
-Or install directly from Python (downloads SQL from GitHub and executes it):
+Or install directly from Python using the SQL script bundled with `pgmq`:
 
 ```python
 from pgmq import install_pgmq_from_sql
 
-# Install the latest release
 install_pgmq_from_sql(
     host="localhost",
     port="5432",
@@ -70,9 +69,13 @@ install_pgmq_from_sql(
     password="postgres",
     database="postgres",
 )
+```
 
-# Or pin a specific version
-install_pgmq_from_sql(
+<!-- GitHub-based install is disabled for now; bundled SQL is the supported path.
+```python
+from pgmq import install_pgmq_from_github
+
+install_pgmq_from_github(
     version="1.11.1",
     host="localhost",
     port="5432",
@@ -81,6 +84,7 @@ install_pgmq_from_sql(
     database="postgres",
 )
 ```
+-->
 
 Version upgrades are not supported yet. This performs a fresh SQL-only install using
 `CREATE ... IF NOT EXISTS` guards in the upstream script.

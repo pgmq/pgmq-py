@@ -67,6 +67,9 @@ Documentation = "https://github.com/pgmq/pgmq-py"
 Changelog = "https://github.com/pgmq/pgmq-py/releases"
 
 
+[tool.uv.build-backend]
+source-include = ["src/pgmq/sql/pgmq.sql"]
+
 [build-system]
 requires = ["uv_build>=0.8.15,<0.9.0"]
 build-backend = "uv_build"

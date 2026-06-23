@@ -1,28 +1,22 @@
-"""Tests for PGMQ SQL installation from GitHub."""
+"""Tests for PGMQ SQL installation."""
 
-import importlib.util
-import json
 import os
 import unittest
 import uuid
-from unittest.mock import patch
 
 import psycopg
 
 from pgmq import PGMQueue
 from pgmq.base import PGMQConfig
 from pgmq.install import (
-    PGMQInstallError,
+    EMBEDDED_SQL_VERSION,
     _resolve_config,
-    build_install_sql_url,
-    get_install_sql,
-    get_latest_release_tag,
+    get_embedded_install_sql,
+    get_embedded_sql_version,
     install_pgmq_from_sql,
     install_pgmq_sql,
 )
 from tests.utils import PG_HOST, PG_PASSWORD, PG_USERNAME, PG_DATABASE
-
-ASYNCPG_AVAILABLE = importlib.util.find_spec("asyncpg") is not None
 
 # Plain Postgres (no PGMQ extension) for SQL-only install integration tests.
 PLAIN_PG_HOST = os.getenv("PG_SQL_INSTALL_HOST", PG_HOST)
@@ -32,7 +26,6 @@ PLAIN_PG_USERNAME = os.getenv("PG_SQL_INSTALL_USERNAME", PG_USERNAME)
 PLAIN_PG_PASSWORD = os.getenv("PG_SQL_INSTALL_PASSWORD", PG_PASSWORD)
 PLAIN_PG_SYNC_DATABASE = "pgmq_sql_install_sync"
 PLAIN_PG_ASYNC_DATABASE = "pgmq_sql_install_async"
-INSTALL_TEST_VERSION = "1.11.1"
 
 
 def _plain_postgres_config(database: str = PLAIN_PG_DATABASE) -> PGMQConfig:
@@ -140,30 +133,26 @@ PLAIN_POSTGRES_SKIP_REASON = (
 )
 
 
-class TestBuildInstallSqlUrl(unittest.TestCase):
-    def test_release_tag_with_v_prefix(self):
-        url = build_install_sql_url("v1.9.0")
-        self.assertEqual(
-            url,
-            "https://raw.githubusercontent.com/pgmq/pgmq/refs/tags/v1.9.0"
-            "/pgmq-extension/sql/pgmq.sql",
-        )
+# GitHub-based install tests (disabled for now):
+#
+# class TestBuildInstallSqlUrl(unittest.TestCase):
+#     ...
+#
+# class TestGithubAuthHeaders(unittest.TestCase):
+#     ...
+#
+# class TestInstallFetch(unittest.TestCase):
+#     ...
 
-    def test_release_tag_without_v_prefix(self):
-        url = build_install_sql_url("1.9.0")
-        self.assertEqual(
-            url,
-            "https://raw.githubusercontent.com/pgmq/pgmq/refs/tags/v1.9.0"
-            "/pgmq-extension/sql/pgmq.sql",
-        )
 
-    def test_git_hash(self):
-        url = build_install_sql_url("eb182e23d71543ba9f0a304fb2865f8b8cc18ae7")
-        self.assertEqual(
-            url,
-            "https://raw.githubusercontent.com/pgmq/pgmq/"
-            "eb182e23d71543ba9f0a304fb2865f8b8cc18ae7/pgmq-extension/sql/pgmq.sql",
-        )
+class TestEmbeddedInstallSql(unittest.TestCase):
+    def test_get_embedded_sql_version(self):
+        self.assertEqual(get_embedded_sql_version(), EMBEDDED_SQL_VERSION)
+
+    def test_get_embedded_install_sql(self):
+        sql = get_embedded_install_sql()
+        self.assertIn("CREATE SCHEMA IF NOT EXISTS pgmq", sql)
+        self.assertGreater(len(sql), 1000)
 
 
 class TestResolveConfig(unittest.TestCase):
@@ -186,40 +175,6 @@ class TestResolveConfig(unittest.TestCase):
             config_kwargs={"conn_string": "host=ignored port=5432 dbname=ignored"},
         )
         self.assertEqual(config.host, "sqlhost")
-
-
-class TestInstallFetch(unittest.TestCase):
-    @patch("pgmq.install._github_request")
-    def test_get_latest_release_tag(self, mock_request):
-        mock_request.return_value = json.dumps({"tag_name": "v1.11.1"}).encode("utf-8")
-        self.assertEqual(get_latest_release_tag(), "v1.11.1")
-
-    @patch("pgmq.install._github_request")
-    def test_get_install_sql_with_explicit_version(self, mock_request):
-        mock_request.return_value = b"CREATE SCHEMA pgmq;"
-        sql = get_install_sql("1.11.1")
-        self.assertEqual(sql, "CREATE SCHEMA pgmq;")
-        mock_request.assert_called_once_with(
-            "https://raw.githubusercontent.com/pgmq/pgmq/refs/tags/v1.11.1"
-            "/pgmq-extension/sql/pgmq.sql"
-        )
-
-    @patch("pgmq.install.get_latest_release_tag", return_value="v1.11.1")
-    @patch("pgmq.install._github_request")
-    def test_get_install_sql_latest(self, mock_request, _mock_latest):
-        mock_request.return_value = b"CREATE SCHEMA pgmq;"
-        sql = get_install_sql()
-        self.assertEqual(sql, "CREATE SCHEMA pgmq;")
-        mock_request.assert_called_once_with(
-            "https://raw.githubusercontent.com/pgmq/pgmq/refs/tags/v1.11.1"
-            "/pgmq-extension/sql/pgmq.sql"
-        )
-
-    @patch("pgmq.install._github_request")
-    def test_get_install_sql_empty_raises(self, mock_request):
-        mock_request.return_value = b"   "
-        with self.assertRaises(PGMQInstallError):
-            get_install_sql("1.11.1")
 
 
 @unittest.skipUnless(_plain_postgres_available(), PLAIN_POSTGRES_SKIP_REASON)
@@ -262,10 +217,7 @@ class TestInstallFromSqlIntegration(unittest.TestCase):
         cls._connection_kwargs = _plain_postgres_connection_kwargs(
             database=PLAIN_PG_SYNC_DATABASE
         )
-        cls.installed_version = install_pgmq_from_sql(
-            version=INSTALL_TEST_VERSION,
-            **cls._connection_kwargs,
-        )
+        cls.installed_version = install_pgmq_from_sql(**cls._connection_kwargs)
         cls.queue = PGMQueue(init_extension=False, **cls._connection_kwargs)
 
     @classmethod
@@ -280,7 +232,7 @@ class TestInstallFromSqlIntegration(unittest.TestCase):
         self.assertTrue(_pgmq_schema_exists(database=PLAIN_PG_SYNC_DATABASE))
 
     def test_queue_operations_after_sql_install(self):
-        self.assertEqual(self.installed_version, INSTALL_TEST_VERSION)
+        self.assertEqual(self.installed_version, EMBEDDED_SQL_VERSION)
         queue_name = f"install_test_{uuid.uuid4().hex[:8]}"
         self.queue.create_queue(queue_name)
         try:
@@ -289,45 +241,30 @@ class TestInstallFromSqlIntegration(unittest.TestCase):
         finally:
             self.queue.drop_queue(queue_name)
 
-
-@unittest.skipUnless(ASYNCPG_AVAILABLE, "asyncpg not installed")
-@unittest.skipUnless(
-    _plain_postgres_ready_for_sql_install(),
-    PLAIN_POSTGRES_SKIP_REASON,
-)
-class TestInstallFromSqlAsyncIntegration(unittest.IsolatedAsyncioTestCase):
-    @classmethod
-    def setUpClass(cls):
+    def test_install_on_second_database(self):
         _drop_database(PLAIN_PG_ASYNC_DATABASE)
         _create_database(PLAIN_PG_ASYNC_DATABASE)
-
-    @classmethod
-    def tearDownClass(cls):
-        _drop_database(PLAIN_PG_ASYNC_DATABASE)
-
-    async def test_install_pgmq_from_sql_async(self):
-        from pgmq.install import install_pgmq_from_sql_async
-
         connection_kwargs = _plain_postgres_connection_kwargs(
             database=PLAIN_PG_ASYNC_DATABASE
         )
-        self.assertFalse(_pgmq_extension_installed(database=PLAIN_PG_ASYNC_DATABASE))
-        self.assertFalse(_pgmq_schema_exists(database=PLAIN_PG_ASYNC_DATABASE))
-
-        version = await install_pgmq_from_sql_async(
-            version=INSTALL_TEST_VERSION,
-            **connection_kwargs,
-        )
-        self.assertEqual(version, INSTALL_TEST_VERSION)
-        self.assertTrue(_pgmq_schema_exists(database=PLAIN_PG_ASYNC_DATABASE))
-        self.assertFalse(_pgmq_extension_installed(database=PLAIN_PG_ASYNC_DATABASE))
-
-        queue = PGMQueue(init_extension=False, **connection_kwargs)
         try:
-            queue_name = f"install_async_{uuid.uuid4().hex[:8]}"
-            queue.create_queue(queue_name)
-            msg_id = queue.send(queue_name, {"installed": True})
-            self.assertGreater(msg_id, 0)
-            queue.drop_queue(queue_name)
+            self.assertFalse(
+                _pgmq_extension_installed(database=PLAIN_PG_ASYNC_DATABASE)
+            )
+            self.assertFalse(_pgmq_schema_exists(database=PLAIN_PG_ASYNC_DATABASE))
+
+            version = install_pgmq_from_sql(**connection_kwargs)
+            self.assertEqual(version, EMBEDDED_SQL_VERSION)
+            self.assertTrue(_pgmq_schema_exists(database=PLAIN_PG_ASYNC_DATABASE))
+
+            queue = PGMQueue(init_extension=False, **connection_kwargs)
+            try:
+                queue_name = f"install_second_db_{uuid.uuid4().hex[:8]}"
+                queue.create_queue(queue_name)
+                msg_id = queue.send(queue_name, {"installed": True})
+                self.assertGreater(msg_id, 0)
+                queue.drop_queue(queue_name)
+            finally:
+                queue.close()
         finally:
-            queue.close()
+            _drop_database(PLAIN_PG_ASYNC_DATABASE)
