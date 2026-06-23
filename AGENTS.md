@@ -9,7 +9,7 @@ This file contains project-specific context for AI coding agents. The project is
 `pgmq` is the official Python client for PGMQ (Postgres Message Queue). It exposes synchronous and asynchronous APIs, with both raw driver (psycopg/asyncpg) and SQLAlchemy-based backends. The public API surface is intentionally identical across all four client variants so users can swap implementations with minimal changes.
 
 - **Package name:** `pgmq`
-- **Version:** `1.1.1` (`pyproject.toml`); runtime `__version__` is read from installed package metadata via `importlib.metadata.version("pgmq")` (falls back to `"unknown"`).
+- **Version:** `1.1.2` (`pyproject.toml`); runtime `__version__` is read from installed package metadata via `importlib.metadata.version("pgmq")` (falls back to `"unknown"`).
 - **License:** Apache-2.0
 - **Python support:** `>=3.10` (classifiers: 3.10–3.14)
 - **Authors:** Adam Hendel, Ali Tavallaie
@@ -37,7 +37,9 @@ This file contains project-specific context for AI coding agents. The project is
 ```
 src/pgmq/
   __init__.py               # Public exports, backward-compat aliases, dynamic version
-  base.py                   # PGMQConfig dataclass + BaseQueue (shared init/logging)
+  base.py                   # PGMQConfig, resolve_pgmq_config(), BaseQueue (shared init/logging)
+  install.py                # Bundled SQL install (install_pgmq_from_sql, PGMQInstallError)
+  sql/pgmq.sql              # Bundled PGMQ SQL-only schema (version marker in first line)
   _client_fields.py         # Shared dataclass fields for all PGMQueue clients
   sync_operations.py        # SyncPGMQueueOperationsMixin — all sync public methods (write once)
   async_operations.py       # AsyncPGMQueueOperationsMixin — all async public methods (write once)
@@ -62,6 +64,7 @@ tests/
   test_notify_listener.py   # NOTIFY/LISTEN tests for all four backends
   test_sql_conversion.py    # Pure unit tests for _sql.py conversions (no DB required)
   test_logger.py            # Logger unit tests
+  test_install.py           # SQL install unit + integration tests (plain Postgres on 5433)
 
 example/
   example_app_sync.py       # Transaction decorator usage examples
@@ -73,6 +76,7 @@ benches/
 docs/
   index.md                    # Documentation homepage
   getting_started.md          # Installation & quick start
+  sql_installation.md         # Bundled SQL install from Python
   configuration.md            # PGMQConfig reference
   clients.md                  # Four backend clients
   queue_management.md         # Create, drop, list, purge queues
@@ -115,14 +119,20 @@ make lint
 
 # Run the full test suite (spins up Docker PostgreSQL automatically)
 make test
-#  → docker rm -f pgmq-postgres
-#  → docker run -d --name pgmq-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 ghcr.io/pgmq/pg18-pgmq:latest
+#  → starts PGMQ Postgres on 5432 and plain Postgres on 5433
 #  → sleep 10
-#  → uv run python -m unittest discover -s tests -p "test_*.py"
+#  → make test-env (full suite)
+#  → make test-sql-install-env (tests.test_install only)
 
 # Run tests against an existing Postgres (no Docker)
 make test-env
 #  → uv run python -m unittest discover -s tests -p "test_*.py"
+
+# SQL install tests only (plain Postgres; default PG_SQL_INSTALL_PORT=5433)
+make test-sql-install-env
+
+# Install bundled PGMQ SQL on plain Postgres (default localhost:5433)
+make install-pgmq-sql
 ```
 
 ### Manual test run (without Makefile)
@@ -395,9 +405,10 @@ Everything users import from `from pgmq import ...`:
 | Dataclasses | `Message`, `QueueMetrics`, `QueueRecord`, `TopicBinding`, `RoutingResult`, `NotificationThrottle` |
 | Decorators | `transaction`, `async_transaction`, `sqlalchemy_transaction`, `sqlalchemy_async_transaction` |
 | Logging | `PGMQLogger`, `create_logger`, `log_performance` |
+| SQL install | `install_pgmq_from_sql`, `install_pgmq_sql`, `get_embedded_install_sql`, `get_embedded_sql_version`, `PGMQInstallError` |
 | Version | `__version__` |
 
-Not exported but available via submodules: `PGMQConfig`, `BaseQueue`, `SyncNotificationListener`, `AsyncNotificationListener`, `BatchTopicResult`.
+Not exported but available via submodules: `PGMQConfig`, `resolve_pgmq_config`, `BaseQueue`, `SyncNotificationListener`, `AsyncNotificationListener`, `BatchTopicResult`.
 
 Optional clients (`AsyncPGMQueue`, `SQLAlchemyPGMQueue`, `SQLAlchemyAsyncPGMQueue`) are `None` when their extra is not installed.
 

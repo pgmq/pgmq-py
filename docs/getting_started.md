@@ -71,20 +71,8 @@ install_pgmq_from_sql(
 )
 ```
 
-<!-- GitHub-based install is disabled for now; bundled SQL is the supported path.
-```python
-from pgmq import install_pgmq_from_github
-
-install_pgmq_from_github(
-    version="1.11.1",
-    host="localhost",
-    port="5432",
-    username="postgres",
-    password="postgres",
-    database="postgres",
-)
-```
--->
+See [SQL Installation](sql_installation.md) for connection options, exceptions,
+and Makefile helpers.
 
 Version upgrades are not supported yet. This performs a fresh SQL-only install using
 `CREATE ... IF NOT EXISTS` guards in the upstream script.
