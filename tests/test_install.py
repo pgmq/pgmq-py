@@ -3,6 +3,7 @@
 import os
 import unittest
 import uuid
+from unittest.mock import patch
 
 import psycopg
 
@@ -10,6 +11,7 @@ from pgmq import PGMQueue
 from pgmq.base import PGMQConfig
 from pgmq.install import (
     EMBEDDED_SQL_VERSION,
+    PGMQInstallError,
     _resolve_config,
     get_embedded_install_sql,
     get_embedded_sql_version,
@@ -175,6 +177,30 @@ class TestResolveConfig(unittest.TestCase):
             config_kwargs={"conn_string": "host=ignored port=5432 dbname=ignored"},
         )
         self.assertEqual(config.host, "sqlhost")
+
+    def test_filters_invalid_config_kwargs(self):
+        config = _resolve_config(
+            config_kwargs={
+                "host": "localhost",
+                "port": "5432",
+                "database": "postgres",
+                "username": "postgres",
+                "password": "postgres",
+                "sslmode": "require",
+                "connect_timeout": 5,
+            },
+        )
+        self.assertEqual(config.host, "localhost")
+        self.assertEqual(config.port, "5432")
+
+
+class TestInstallPgmqSqlErrors(unittest.TestCase):
+    @patch("pgmq.install.psycopg.connect")
+    def test_connection_failure_raises_install_error(self, mock_connect):
+        mock_connect.side_effect = psycopg.OperationalError("connection refused")
+        with self.assertRaises(PGMQInstallError) as ctx:
+            install_pgmq_sql("SELECT 1;", host="localhost")
+        self.assertIn("connection refused", str(ctx.exception))
 
 
 @unittest.skipUnless(_plain_postgres_available(), PLAIN_POSTGRES_SKIP_REASON)

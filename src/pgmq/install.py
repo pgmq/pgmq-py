@@ -54,11 +54,17 @@ def _resolve_config(
         if dsn is not None or config_kwargs:
             raise ValueError("Cannot combine config with dsn or connection kwargs")
         return config
+
+    valid_fields = set(PGMQConfig.__dataclass_fields__.keys())
+    filtered_kwargs = {
+        k: v for k, v in (config_kwargs or {}).items() if k in valid_fields
+    }
+
     if dsn is not None:
-        merged = {**(config_kwargs or {}), "conn_string": dsn}
-        return PGMQConfig(**merged)
-    if config_kwargs:
-        return PGMQConfig(**config_kwargs)
+        filtered_kwargs["conn_string"] = dsn
+        return PGMQConfig(**filtered_kwargs)
+    if filtered_kwargs:
+        return PGMQConfig(**filtered_kwargs)
     return PGMQConfig()
 
 
@@ -94,8 +100,11 @@ def install_pgmq_sql(
         resolved_config = _resolve_config(
             config=config, dsn=dsn, config_kwargs=config_kwargs or None
         )
-        conn = psycopg.connect(resolved_config.dsn, autocommit=False)
-        own_conn = True
+        try:
+            conn = psycopg.connect(resolved_config.dsn, autocommit=False)
+            own_conn = True
+        except Exception as exc:
+            raise PGMQInstallError(f"Failed to connect to PostgreSQL: {exc}") from exc
 
     try:
         log_with_context(logger, logging.INFO, "Executing PGMQ installation SQL")
@@ -106,7 +115,7 @@ def install_pgmq_sql(
     except Exception as exc:
         raise PGMQInstallError(f"Failed to execute PGMQ SQL: {exc}") from exc
     finally:
-        if own_conn:
+        if own_conn and conn is not None:
             conn.close()
 
 
