@@ -6,13 +6,12 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import psycopg
+from psycopg import sql
 
 from pgmq import PGMQueue
-from pgmq.base import PGMQConfig
+from pgmq.base import PGMQConfig, resolve_pgmq_config
 from pgmq.install import (
-    EMBEDDED_SQL_VERSION,
     PGMQInstallError,
-    _resolve_config,
     get_embedded_install_sql,
     get_embedded_sql_version,
     install_pgmq_from_sql,
@@ -27,7 +26,7 @@ PLAIN_PG_DATABASE = os.getenv("PG_SQL_INSTALL_DATABASE", PG_DATABASE)
 PLAIN_PG_USERNAME = os.getenv("PG_SQL_INSTALL_USERNAME", PG_USERNAME)
 PLAIN_PG_PASSWORD = os.getenv("PG_SQL_INSTALL_PASSWORD", PG_PASSWORD)
 PLAIN_PG_SYNC_DATABASE = "pgmq_sql_install_sync"
-PLAIN_PG_ASYNC_DATABASE = "pgmq_sql_install_async"
+PLAIN_PG_SECOND_DATABASE = "pgmq_sql_install_second"
 
 
 def _plain_postgres_config(database: str = PLAIN_PG_DATABASE) -> PGMQConfig:
@@ -37,6 +36,7 @@ def _plain_postgres_config(database: str = PLAIN_PG_DATABASE) -> PGMQConfig:
         database=database,
         username=PLAIN_PG_USERNAME,
         password=PLAIN_PG_PASSWORD,
+        conn_string=None,
     )
 
 
@@ -106,7 +106,7 @@ def _create_database(database: str) -> None:
             (database,),
         ).fetchone()[0]
         if not exists:
-            conn.execute(f'CREATE DATABASE "{database}"')
+            conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database)))
     finally:
         conn.close()
 
@@ -123,7 +123,9 @@ def _drop_database(database: str) -> None:
             "WHERE datname = %s AND pid <> pg_backend_pid()",
             (database,),
         )
-        conn.execute(f'DROP DATABASE IF EXISTS "{database}"')
+        conn.execute(
+            sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(database))
+        )
     finally:
         conn.close()
 
@@ -135,26 +137,19 @@ PLAIN_POSTGRES_SKIP_REASON = (
 )
 
 
-# GitHub-based install tests (disabled for now):
-#
-# class TestBuildInstallSqlUrl(unittest.TestCase):
-#     ...
-#
-# class TestGithubAuthHeaders(unittest.TestCase):
-#     ...
-#
-# class TestInstallFetch(unittest.TestCase):
-#     ...
-
-
 class TestEmbeddedInstallSql(unittest.TestCase):
     def test_get_embedded_sql_version(self):
-        self.assertEqual(get_embedded_sql_version(), EMBEDDED_SQL_VERSION)
+        version = get_embedded_sql_version()
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
 
     def test_get_embedded_install_sql(self):
-        sql = get_embedded_install_sql()
-        self.assertIn("CREATE SCHEMA IF NOT EXISTS pgmq", sql)
-        self.assertGreater(len(sql), 1000)
+        sql_script = get_embedded_install_sql()
+        self.assertIn("CREATE SCHEMA IF NOT EXISTS pgmq", sql_script)
+        self.assertGreater(len(sql_script), 1000)
+        self.assertIn(
+            f"-- pgmq-py bundled SQL version: {get_embedded_sql_version()}",
+            sql_script,
+        )
 
     @patch("pgmq.install.files")
     def test_get_embedded_install_sql_read_failure(self, mock_files):
@@ -169,7 +164,7 @@ class TestEmbeddedInstallSql(unittest.TestCase):
 
 class TestResolveConfig(unittest.TestCase):
     def test_dsn_merges_config_kwargs(self):
-        config = _resolve_config(
+        config = resolve_pgmq_config(
             dsn=(
                 "host=localhost port=5432 dbname=postgres "
                 "user=postgres password=postgres"
@@ -182,30 +177,32 @@ class TestResolveConfig(unittest.TestCase):
         self.assertEqual(config.database, "postgres")
 
     def test_dsn_takes_precedence_over_conn_string_in_config_kwargs(self):
-        config = _resolve_config(
+        config = resolve_pgmq_config(
             dsn="host=sqlhost port=5432 dbname=postgres user=postgres password=secret",
             config_kwargs={"conn_string": "host=ignored port=5432 dbname=ignored"},
         )
         self.assertEqual(config.host, "sqlhost")
 
-    def test_filters_invalid_config_kwargs(self):
-        config = _resolve_config(
-            config_kwargs={
-                "host": "localhost",
-                "port": "5432",
-                "database": "postgres",
-                "username": "postgres",
-                "password": "postgres",
-                "sslmode": "require",
-                "connect_timeout": 5,
-            },
-        )
-        self.assertEqual(config.host, "localhost")
-        self.assertEqual(config.port, "5432")
+    def test_rejects_unsupported_config_kwargs(self):
+        with self.assertRaises(ValueError) as ctx:
+            resolve_pgmq_config(
+                config_kwargs={
+                    "host": "localhost",
+                    "port": "5432",
+                    "database": "postgres",
+                    "username": "postgres",
+                    "password": "postgres",
+                    "sslmode": "require",
+                    "connect_timeout": 5,
+                },
+            )
+        self.assertIn("sslmode", str(ctx.exception))
+        self.assertIn("connect_timeout", str(ctx.exception))
+        self.assertIn("dsn", str(ctx.exception))
 
     @patch.dict(os.environ, {"DATABASE_URL": "postgresql://envhost:5432/envdb"})
     def test_explicit_kwargs_not_overridden_by_database_url(self):
-        config = _resolve_config(
+        config = resolve_pgmq_config(
             config_kwargs={
                 "host": "localhost",
                 "port": "5432",
@@ -219,11 +216,23 @@ class TestResolveConfig(unittest.TestCase):
 
 
 class TestInstallPgmqSqlErrors(unittest.TestCase):
+    def test_empty_sql_raises_install_error(self):
+        with self.assertRaises(PGMQInstallError) as ctx:
+            install_pgmq_sql("   ", host="localhost")
+        self.assertIn("empty", str(ctx.exception).lower())
+
     @patch("pgmq.install.psycopg.connect")
     def test_connection_failure_raises_install_error(self, mock_connect):
         mock_connect.side_effect = psycopg.OperationalError("connection refused")
         with self.assertRaises(PGMQInstallError) as ctx:
-            install_pgmq_sql("SELECT 1;", host="localhost")
+            install_pgmq_sql(
+                "SELECT 1;",
+                host="localhost",
+                port="5432",
+                database="postgres",
+                username="postgres",
+                password="postgres",
+            )
         self.assertIn("connection refused", str(ctx.exception))
 
     @patch("pgmq.install.psycopg.connect")
@@ -235,6 +244,24 @@ class TestInstallPgmqSqlErrors(unittest.TestCase):
         )
         install_pgmq_sql("SELECT 1;", dsn=dsn)
         mock_connect.assert_called_once_with(dsn, autocommit=False)
+
+    @patch("pgmq.install._execute_sql_script")
+    @patch("pgmq.install.psycopg.connect")
+    def test_sql_execution_failure_raises_install_error(
+        self, mock_connect, mock_execute
+    ):
+        mock_connect.return_value = MagicMock()
+        mock_execute.side_effect = psycopg.Error("syntax error at line 1")
+        with self.assertRaises(PGMQInstallError) as ctx:
+            install_pgmq_sql(
+                "SELECT 1;",
+                host="localhost",
+                port="5432",
+                database="postgres",
+                username="postgres",
+                password="postgres",
+            )
+        self.assertIn("syntax error", str(ctx.exception))
 
 
 @unittest.skipUnless(_plain_postgres_available(), PLAIN_POSTGRES_SKIP_REASON)
@@ -264,6 +291,15 @@ class TestInstallSqlExecution(unittest.TestCase):
                 host="localhost",
             )
 
+    def test_install_pgmq_sql_rejects_unsupported_connect_kwargs(self):
+        with self.assertRaises(ValueError) as ctx:
+            install_pgmq_sql(
+                "SELECT 1;",
+                host="localhost",
+                sslmode="require",
+            )
+        self.assertIn("sslmode", str(ctx.exception))
+
 
 @unittest.skipUnless(
     _plain_postgres_ready_for_sql_install(),
@@ -292,7 +328,7 @@ class TestInstallFromSqlIntegration(unittest.TestCase):
         self.assertTrue(_pgmq_schema_exists(database=PLAIN_PG_SYNC_DATABASE))
 
     def test_queue_operations_after_sql_install(self):
-        self.assertEqual(self.installed_version, EMBEDDED_SQL_VERSION)
+        self.assertEqual(self.installed_version, get_embedded_sql_version())
         queue_name = f"install_test_{uuid.uuid4().hex[:8]}"
         self.queue.create_queue(queue_name)
         try:
@@ -301,21 +337,25 @@ class TestInstallFromSqlIntegration(unittest.TestCase):
         finally:
             self.queue.drop_queue(queue_name)
 
+    def test_reinstall_raises_when_schema_already_exists(self):
+        with self.assertRaises(PGMQInstallError):
+            install_pgmq_from_sql(**self._connection_kwargs)
+
     def test_install_on_second_database(self):
-        _drop_database(PLAIN_PG_ASYNC_DATABASE)
-        _create_database(PLAIN_PG_ASYNC_DATABASE)
+        _drop_database(PLAIN_PG_SECOND_DATABASE)
+        _create_database(PLAIN_PG_SECOND_DATABASE)
         connection_kwargs = _plain_postgres_connection_kwargs(
-            database=PLAIN_PG_ASYNC_DATABASE
+            database=PLAIN_PG_SECOND_DATABASE
         )
         try:
             self.assertFalse(
-                _pgmq_extension_installed(database=PLAIN_PG_ASYNC_DATABASE)
+                _pgmq_extension_installed(database=PLAIN_PG_SECOND_DATABASE)
             )
-            self.assertFalse(_pgmq_schema_exists(database=PLAIN_PG_ASYNC_DATABASE))
+            self.assertFalse(_pgmq_schema_exists(database=PLAIN_PG_SECOND_DATABASE))
 
             version = install_pgmq_from_sql(**connection_kwargs)
-            self.assertEqual(version, EMBEDDED_SQL_VERSION)
-            self.assertTrue(_pgmq_schema_exists(database=PLAIN_PG_ASYNC_DATABASE))
+            self.assertEqual(version, get_embedded_sql_version())
+            self.assertTrue(_pgmq_schema_exists(database=PLAIN_PG_SECOND_DATABASE))
 
             queue = PGMQueue(init_extension=False, **connection_kwargs)
             try:
@@ -327,4 +367,4 @@ class TestInstallFromSqlIntegration(unittest.TestCase):
             finally:
                 queue.close()
         finally:
-            _drop_database(PLAIN_PG_ASYNC_DATABASE)
+            _drop_database(PLAIN_PG_SECOND_DATABASE)
