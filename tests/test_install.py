@@ -3,7 +3,7 @@
 import os
 import unittest
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import psycopg
 
@@ -156,6 +156,16 @@ class TestEmbeddedInstallSql(unittest.TestCase):
         self.assertIn("CREATE SCHEMA IF NOT EXISTS pgmq", sql)
         self.assertGreater(len(sql), 1000)
 
+    @patch("pgmq.install.files")
+    def test_get_embedded_install_sql_read_failure(self, mock_files):
+        mock_files.return_value.joinpath.return_value.read_text.side_effect = (
+            FileNotFoundError("pgmq.sql not found")
+        )
+        with self.assertRaises(PGMQInstallError) as ctx:
+            get_embedded_install_sql()
+        self.assertIn("Failed to read embedded PGMQ SQL script", str(ctx.exception))
+        self.assertIn("pgmq.sql not found", str(ctx.exception))
+
 
 class TestResolveConfig(unittest.TestCase):
     def test_dsn_merges_config_kwargs(self):
@@ -193,6 +203,20 @@ class TestResolveConfig(unittest.TestCase):
         self.assertEqual(config.host, "localhost")
         self.assertEqual(config.port, "5432")
 
+    @patch.dict(os.environ, {"DATABASE_URL": "postgresql://envhost:5432/envdb"})
+    def test_explicit_kwargs_not_overridden_by_database_url(self):
+        config = _resolve_config(
+            config_kwargs={
+                "host": "localhost",
+                "port": "5432",
+                "database": "postgres",
+                "username": "postgres",
+                "password": "postgres",
+            },
+        )
+        self.assertEqual(config.host, "localhost")
+        self.assertEqual(config.database, "postgres")
+
 
 class TestInstallPgmqSqlErrors(unittest.TestCase):
     @patch("pgmq.install.psycopg.connect")
@@ -201,6 +225,16 @@ class TestInstallPgmqSqlErrors(unittest.TestCase):
         with self.assertRaises(PGMQInstallError) as ctx:
             install_pgmq_sql("SELECT 1;", host="localhost")
         self.assertIn("connection refused", str(ctx.exception))
+
+    @patch("pgmq.install.psycopg.connect")
+    def test_connect_uses_conn_string_to_preserve_options(self, mock_connect):
+        mock_connect.return_value = MagicMock()
+        dsn = (
+            "host=localhost port=5432 dbname=postgres user=postgres "
+            "password=postgres sslmode=require connect_timeout=5"
+        )
+        install_pgmq_sql("SELECT 1;", dsn=dsn)
+        mock_connect.assert_called_once_with(dsn, autocommit=False)
 
 
 @unittest.skipUnless(_plain_postgres_available(), PLAIN_POSTGRES_SKIP_REASON)

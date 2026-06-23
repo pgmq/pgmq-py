@@ -38,7 +38,14 @@ def get_embedded_install_sql() -> str:
     Returns:
         Raw SQL script contents.
     """
-    sql_content = files("pgmq").joinpath("sql", "pgmq.sql").read_text(encoding="utf-8")
+    try:
+        sql_content = (
+            files("pgmq").joinpath("sql", "pgmq.sql").read_text(encoding="utf-8")
+        )
+    except Exception as exc:
+        raise PGMQInstallError(
+            f"Failed to read embedded PGMQ SQL script: {exc}"
+        ) from exc
     if not sql_content.strip():
         raise PGMQInstallError("Embedded PGMQ SQL script is empty")
     return sql_content
@@ -64,6 +71,7 @@ def _resolve_config(
         filtered_kwargs["conn_string"] = dsn
         return PGMQConfig(**filtered_kwargs)
     if filtered_kwargs:
+        filtered_kwargs.setdefault("conn_string", None)
         return PGMQConfig(**filtered_kwargs)
     return PGMQConfig()
 
@@ -101,7 +109,9 @@ def install_pgmq_sql(
             config=config, dsn=dsn, config_kwargs=config_kwargs or None
         )
         try:
-            conn = psycopg.connect(resolved_config.dsn, autocommit=False)
+            conn = psycopg.connect(
+                resolved_config.conn_string or resolved_config.dsn, autocommit=False
+            )
             own_conn = True
         except Exception as exc:
             raise PGMQInstallError(f"Failed to connect to PostgreSQL: {exc}") from exc
