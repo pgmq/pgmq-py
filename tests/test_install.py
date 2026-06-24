@@ -201,7 +201,15 @@ class TestResolveConfig(unittest.TestCase):
         self.assertIn("dsn", str(ctx.exception))
 
     @patch.dict(os.environ, {"DATABASE_URL": "postgresql://envhost:5432/envdb"})
-    def test_explicit_kwargs_not_overridden_by_database_url(self):
+    def test_non_connection_kwargs_preserve_database_url(self):
+        config = resolve_pgmq_config(config_kwargs={"verbose": True, "pool_size": 5})
+        self.assertTrue(config.verbose)
+        self.assertEqual(config.pool_size, 5)
+        self.assertEqual(config.host, "envhost")
+        self.assertEqual(config.database, "envdb")
+
+    @patch.dict(os.environ, {"DATABASE_URL": "postgresql://envhost:5432/envdb"})
+    def test_explicit_connection_kwargs_not_overridden_by_database_url(self):
         config = resolve_pgmq_config(
             config_kwargs={
                 "host": "localhost",

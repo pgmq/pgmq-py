@@ -167,6 +167,11 @@ class PGMQConfig:
         return f"postgresql://{user}:{password}@{self.host}:{self.port}/{self.database}"
 
 
+_CONNECTION_FIELDS = frozenset(
+    {"host", "port", "database", "username", "password", "conn_string"}
+)
+
+
 def resolve_pgmq_config(
     *,
     config: Optional[PGMQConfig] = None,
@@ -199,7 +204,9 @@ def resolve_pgmq_config(
         filtered_kwargs["conn_string"] = dsn
         return PGMQConfig(**filtered_kwargs)
     if filtered_kwargs:
-        filtered_kwargs.setdefault("conn_string", None)
+        explicit_connection = _CONNECTION_FIELDS.intersection(filtered_kwargs)
+        if explicit_connection - {"conn_string"}:
+            filtered_kwargs.setdefault("conn_string", None)
         return PGMQConfig(**filtered_kwargs)
     return PGMQConfig()
 
