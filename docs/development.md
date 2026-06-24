@@ -71,13 +71,24 @@ make vendor-pgmq-sql TAG=v1.11.1
 uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
 ```
 
-#### Cross-repo release trigger
+#### Automated vendor updates (dual trigger)
 
-When the PGMQ extension publishes a GitHub release, it should dispatch this
-workflow in `pgmq-py`:
+`.github/workflows/vendor_pgmq_sql.yml` keeps bundled SQL current using **two
+complementary triggers**:
+
+| Trigger | When | Upstream change required? |
+|---------|------|---------------------------|
+| **Daily cron** (06:00 UTC) | Polls `pgmq/pgmq` latest release | No |
+| **`repository_dispatch`** | Immediate on extension release | Optional |
+
+If the extension dispatch fails or is not configured, the daily job picks up the
+new release on the next run. If both fire for the same version, the workflow
+skips when the bundled version already matches (no duplicate PR).
+
+**Optional fast path** — add to [pgmq/pgmq](https://github.com/pgmq/pgmq)
+`release.yml` after a release is published:
 
 ```yaml
-# Add to pgmq/pgmq release workflow (after the release is published):
 - name: Trigger pgmq-py SQL vendor update
   uses: peter-evans/repository-dispatch@v3
   with:
@@ -87,14 +98,21 @@ workflow in `pgmq-py`:
     client-payload: '{"tag":"${{ github.ref_name }}"}'
 ```
 
-Create `PGMQ_PY_DISPATCH_TOKEN` in the extension repo: a fine-grained PAT (or
-classic PAT) with `contents: write` on `pgmq/pgmq-py` so
-`.github/workflows/vendor_pgmq_sql.yml` can open a PR.
+Create `PGMQ_PY_DISPATCH_TOKEN` in the extension repo: a PAT with permission to
+dispatch workflows on `pgmq/pgmq-py`.
 
-The vendor workflow also supports manual runs:
+**Manual run:**
 
 ```bash
-gh workflow run vendor_pgmq_sql.yml -f tag=v1.11.1
+gh workflow run vendor_pgmq_sql.yml --repo pgmq/pgmq-py -f tag=v1.11.1
+```
+
+**Verify dispatch without upstream changes:**
+
+```bash
+gh api repos/pgmq/pgmq-py/dispatches \
+  -f event_type=pgmq-extension-release \
+  -f client_payload='{"tag":"v1.11.1"}'
 ```
 
 ## Docker Helpers
