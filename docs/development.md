@@ -60,6 +60,43 @@ via `PG_SQL_INSTALL_*` variables (see [SQL Installation](sql_installation.md)).
 
 CI also runs this path in `.github/workflows/sql_install_tests.yml`.
 
+### Vendor bundled `pgmq.sql` from a PGMQ extension release
+
+The Python package vendors `src/pgmq/sql/pgmq.sql` from the
+[PGMQ extension repository](https://github.com/pgmq/pgmq). Update it when the
+extension cuts a new release:
+
+```bash
+make vendor-pgmq-sql TAG=v1.11.1
+uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
+```
+
+#### Cross-repo release trigger
+
+When the PGMQ extension publishes a GitHub release, it should dispatch this
+workflow in `pgmq-py`:
+
+```yaml
+# Add to pgmq/pgmq release workflow (after the release is published):
+- name: Trigger pgmq-py SQL vendor update
+  uses: peter-evans/repository-dispatch@v3
+  with:
+    token: ${{ secrets.PGMQ_PY_DISPATCH_TOKEN }}
+    repository: pgmq/pgmq-py
+    event-type: pgmq-extension-release
+    client-payload: '{"tag":"${{ github.ref_name }}"}'
+```
+
+Create `PGMQ_PY_DISPATCH_TOKEN` in the extension repo: a fine-grained PAT (or
+classic PAT) with `contents: write` on `pgmq/pgmq-py` so
+`.github/workflows/vendor_pgmq_sql.yml` can open a PR.
+
+The vendor workflow also supports manual runs:
+
+```bash
+gh workflow run vendor_pgmq_sql.yml -f tag=v1.11.1
+```
+
 ## Docker Helpers
 
 ```bash

@@ -1,6 +1,6 @@
 SCOPE=src/
 
-.PHONY: format lint test test-env test-sql-install-env install-pgmq-sql clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
+.PHONY: format lint test test-env test-sql-install-env install-pgmq-sql vendor-pgmq-sql clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
 
 PG_SQL_INSTALL_HOST ?= localhost
 PG_SQL_INSTALL_PORT ?= 5433
@@ -52,6 +52,10 @@ test-sql-install-env:
 	PG_SQL_INSTALL_HOST=$(PG_SQL_INSTALL_HOST) \
 	PG_SQL_INSTALL_PORT=$(PG_SQL_INSTALL_PORT) \
 	uv run python -m unittest tests.test_install -v
+
+vendor-pgmq-sql:
+	@if [ -z "$(TAG)" ]; then echo "TAG is required, e.g. make vendor-pgmq-sql TAG=v1.11.1"; exit 1; fi
+	uv run python scripts/vendor_pgmq_sql.py "$(TAG)"
 
 install-pgmq-sql:
 	PG_HOST=$(PG_SQL_INSTALL_HOST) \

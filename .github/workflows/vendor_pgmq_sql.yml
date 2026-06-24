@@ -1,0 +1,87 @@
+name: Vendor PGMQ SQL
+
+# Triggered when the PGMQ extension repo publishes a release.
+# Upstream (pgmq/pgmq) should call repository_dispatch on this workflow.
+# See docs/development.md for the upstream release hook.
+
+on:
+  repository_dispatch:
+    types: [pgmq-extension-release]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: PGMQ extension release tag (e.g. v1.11.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  vendor-sql:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            TAG="${{ github.event.client_payload.tag }}"
+            if [ -z "$TAG" ]; then
+              TAG="${{ github.event.client_payload.version }}"
+            fi
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "Release tag is required in client_payload.tag or workflow input"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+
+      - name: Install Python 3.13
+        run: uv python install 3.13
+
+      - name: Vendor pgmq.sql from extension release
+        run: uv run python scripts/vendor_pgmq_sql.py "${{ steps.meta.outputs.tag }}"
+
+      - name: Verify bundled SQL version
+        run: |
+          uv run python - <<'PY'
+          from pgmq.install import get_embedded_sql_version
+          expected = "${{ steps.meta.outputs.version }}"
+          actual = get_embedded_sql_version()
+          if actual != expected:
+              raise SystemExit(f"Expected bundled version {expected}, got {actual}")
+          print(f"Bundled SQL version OK: {actual}")
+          PY
+
+      - name: Run SQL install tests
+        run: uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: vendor/pgmq-sql-${{ steps.meta.outputs.version }}
+          delete-branch: true
+          title: "chore: vendor pgmq.sql from PGMQ extension ${{ steps.meta.outputs.tag }}"
+          body: |
+            Automated update triggered by PGMQ extension release `${{ steps.meta.outputs.tag }}`.
+
+            - Source: `pgmq/pgmq` @ `${{ steps.meta.outputs.tag }}`
+            - Bundled file: `src/pgmq/sql/pgmq.sql`
+
+            Merge after review, then cut a `pgmq-py` release so PyPI users receive the new SQL.
+          commit-message: "chore: vendor pgmq.sql from PGMQ extension ${{ steps.meta.outputs.tag }}"
+          labels: dependencies,sql
