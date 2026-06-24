@@ -1,6 +1,12 @@
 SCOPE=src/
 
-.PHONY: format lint test clear-postgres run-pgmq-postgres docs-serve docs-build docs-deploy
+.PHONY: format lint test test-env test-sql-install-env install-pgmq-sql vendor-pgmq-sql clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
+
+PG_SQL_INSTALL_HOST ?= localhost
+PG_SQL_INSTALL_PORT ?= 5433
+PG_SQL_INSTALL_DATABASE ?= postgres
+PG_SQL_INSTALL_USERNAME ?= postgres
+PG_SQL_INSTALL_PASSWORD ?= postgres
 
 
 docs-serve:
@@ -28,9 +34,34 @@ clear-postgres:
 run-pgmq-postgres:
 	docker run -d --name pgmq-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 ghcr.io/pgmq/pg18-pgmq:latest
 
-test: clear-postgres run-pgmq-postgres
+clear-plain-postgres:
+	docker rm -f pgmq-plain-postgres || true
+
+run-plain-postgres:
+	docker run -d --name pgmq-plain-postgres -e POSTGRES_PASSWORD=postgres -p 5433:5432 postgres:18
+
+test: clear-postgres clear-plain-postgres run-pgmq-postgres run-plain-postgres
 	sleep 10  # Give PostgreSQL time to start
-	uv run python -m unittest discover -s tests -p "test_*.py"
+	$(MAKE) test-env
+	$(MAKE) test-sql-install-env
 
 test-env:
 	uv run python -m unittest discover -s tests -p "test_*.py"
+
+test-sql-install-env:
+	PG_SQL_INSTALL_HOST=$(PG_SQL_INSTALL_HOST) \
+	PG_SQL_INSTALL_PORT=$(PG_SQL_INSTALL_PORT) \
+	uv run python -m unittest tests.test_install -v
+
+vendor-pgmq-sql:
+	@if [ -z "$(TAG)" ]; then echo "TAG is required, e.g. make vendor-pgmq-sql TAG=v1.11.1"; exit 1; fi
+	uv run python scripts/vendor_pgmq_sql.py "$(TAG)"
+
+install-pgmq-sql:
+	PG_HOST=$(PG_SQL_INSTALL_HOST) \
+	PG_PORT=$(PG_SQL_INSTALL_PORT) \
+	PG_DATABASE=$(PG_SQL_INSTALL_DATABASE) \
+	PG_USERNAME=$(PG_SQL_INSTALL_USERNAME) \
+	PG_PASSWORD=$(PG_SQL_INSTALL_PASSWORD) \
+	DATABASE_URL= \
+	uv run python -c "from pgmq import install_pgmq_from_sql; install_pgmq_from_sql()"

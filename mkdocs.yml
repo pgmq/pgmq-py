@@ -23,6 +23,7 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
+  - SQL Installation: sql_installation.md
   - Configuration: configuration.md
   - Clients: clients.md
   - Queue Management: queue_management.md

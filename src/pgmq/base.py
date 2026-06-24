@@ -4,13 +4,21 @@ Base configuration and shared utilities for PGMQ clients.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 import os
 import logging
 import urllib.parse
 
 from pgmq.logger import LoggingManager, log_with_context
 from psycopg.conninfo import conninfo_to_dict
+
+
+def _env_bool(name: str, default: bool = True) -> bool:
+    """Parse a boolean environment variable."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in ("1", "true", "yes")
 
 
 @dataclass
@@ -44,7 +52,9 @@ class PGMQConfig:
     log_rotation: bool = False
     log_rotation_size: str = "10 MB"
     log_retention: str = "1 week"
-    init_extension: bool = True
+    init_extension: bool = field(
+        default_factory=lambda: _env_bool("PG_INIT_EXTENSION", True)
+    )
 
     def __post_init__(self) -> None:
         """Validate and normalize configuration."""
@@ -157,6 +167,50 @@ class PGMQConfig:
         return f"postgresql://{user}:{password}@{self.host}:{self.port}/{self.database}"
 
 
+_CONNECTION_FIELDS = frozenset(
+    {"host", "port", "database", "username", "password", "conn_string"}
+)
+
+
+def resolve_pgmq_config(
+    *,
+    config: Optional[PGMQConfig] = None,
+    dsn: Optional[str] = None,
+    config_kwargs: Optional[dict[str, Any]] = None,
+) -> PGMQConfig:
+    """
+    Build a :class:`PGMQConfig` from explicit fields, a DSN, or keyword arguments.
+
+    Libpq connection options (for example ``sslmode`` or ``connect_timeout``) must
+    be included in ``dsn`` or ``conn_string``, not passed as keyword arguments.
+    """
+    if config is not None:
+        if dsn is not None or config_kwargs:
+            raise ValueError("Cannot combine config with dsn or connection kwargs")
+        return config
+
+    valid_fields = set(PGMQConfig.__dataclass_fields__.keys())
+    raw_kwargs = config_kwargs or {}
+    unsupported = sorted(k for k in raw_kwargs if k not in valid_fields)
+    if unsupported:
+        raise ValueError(
+            f"Unsupported connection parameters: {unsupported}. "
+            "Pass libpq options (for example sslmode or connect_timeout) "
+            "via dsn or conn_string."
+        )
+    filtered_kwargs = dict(raw_kwargs)
+
+    if dsn is not None:
+        filtered_kwargs["conn_string"] = dsn
+        return PGMQConfig(**filtered_kwargs)
+    if filtered_kwargs:
+        explicit_connection = _CONNECTION_FIELDS.intersection(filtered_kwargs)
+        if explicit_connection - {"conn_string"}:
+            filtered_kwargs.setdefault("conn_string", None)
+        return PGMQConfig(**filtered_kwargs)
+    return PGMQConfig()
+
+
 class BaseQueue:
     """
     Base class providing shared initialization and utilities for queue clients.
@@ -174,14 +228,12 @@ class BaseQueue:
         Supports both legacy-style initialization (individual kwargs) and
         modern style (passing a PGMQConfig object).
         """
-        # Handle both config object and legacy kwargs
         if "config" in kwargs and isinstance(kwargs["config"], PGMQConfig):
+            if len(kwargs) > 1:
+                raise ValueError("Cannot combine config with other connection kwargs")
             self.config = kwargs["config"]
         else:
-            # Filter kwargs to only include valid config fields
-            valid_fields = set(PGMQConfig.__dataclass_fields__.keys())
-            config_kwargs = {k: v for k, v in kwargs.items() if k in valid_fields}
-            self.config = PGMQConfig(**config_kwargs)
+            self.config = resolve_pgmq_config(config_kwargs=kwargs)
 
         # Setup logging
         self.logger = LoggingManager.get_logger(

@@ -47,6 +47,15 @@ from pgmq.decorators import (
 # Logging utilities
 from pgmq.logger import PGMQLogger, create_logger, log_performance
 
+# SQL installation utilities
+from pgmq.install import (
+    PGMQInstallError,
+    get_embedded_install_sql,
+    get_embedded_sql_version,
+    install_pgmq_from_sql,
+    install_pgmq_sql,
+)
+
 # Backward compatibility: PGMQueue points to sync version
 PGMQueue = SyncPGMQueue
 
@@ -80,6 +89,12 @@ __all__ = [
     "PGMQLogger",
     "create_logger",
     "log_performance",
+    # SQL installation
+    "PGMQInstallError",
+    "get_embedded_install_sql",
+    "get_embedded_sql_version",
+    "install_pgmq_from_sql",
+    "install_pgmq_sql",
     # Version
     "__version__",
 ]
