@@ -30,6 +30,21 @@ permissions:
 jobs:
   vendor-sql:
     runs-on: ubuntu-latest
+    services:
+      plain-postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PG_SQL_INSTALL_HOST: localhost
+      PG_SQL_INSTALL_PORT: "5432"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -96,6 +111,10 @@ jobs:
         if: steps.meta.outputs.needs_update == 'true'
         run: uv run python -m unittest tests.test_install.TestEmbeddedInstallSql tests.test_vendor_pgmq_sql -v
 
+      - name: Run SQL install integration tests
+        if: steps.meta.outputs.needs_update == 'true'
+        run: make test-sql-install-env
+
       - name: Create pull request
         if: steps.meta.outputs.needs_update == 'true'
         uses: peter-evans/create-pull-request@v7
@@ -109,7 +128,8 @@ jobs:
 
             - Source: [pgmq/pgmq](https://github.com/pgmq/pgmq) @ `${{ steps.meta.outputs.tag }}`
             - Pin file: `src/pgmq/sql/VERSION`
-            - `src/pgmq/sql/pgmq.sql` is downloaded in CI and at package build time; it is not committed.
+            - `src/pgmq/sql/pgmq.sql` is downloaded in CI and by `make build`; it is not committed.
+            - This workflow runs SQL-install tests against plain Postgres before opening the PR.
 
             Merge after review, then cut a `pgmq-py` release so PyPI users receive the new SQL.
           commit-message: "chore: pin pgmq.sql to PGMQ extension ${{ steps.meta.outputs.tag }}"

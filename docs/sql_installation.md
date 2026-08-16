@@ -52,8 +52,10 @@ and similar) are **not** accepted as keyword arguments. Pass them inside
 `dsn` or `conn_string` instead. Unknown keyword arguments raise
 `ValueError`.
 
-When you pass explicit connection fields, `DATABASE_URL` is ignored for the
-install connection (same behavior as [`PGMQueue`][pgmq.queue.PGMQueue]).
+When you pass explicit connection fields (`host`, `port`, `database`,
+`username`, or `password`), `DATABASE_URL` is ignored for the install
+connection. [`PGMQueue`][pgmq.queue.PGMQueue] is different: `DATABASE_URL` /
+`conn_string` still wins unless the caller passes `conn_string=None`.
 
 ## Exceptions
 

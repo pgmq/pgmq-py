@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Download pgmq.sql from a pinned PGMQ extension release.
 
-The SQL file is not committed. CI, local tests, and package builds fetch it
-from the extension tag recorded in ``src/pgmq/sql/VERSION``.
+The SQL file is not committed. CI and ``make build`` fetch it from the
+extension tag in ``src/pgmq/sql/VERSION`` before ``uv build``.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ PGMQ_REPO = "pgmq/pgmq"
 SQL_PATH = "pgmq-extension/sql/pgmq.sql"
 PIN_PATH = "src/pgmq/sql/VERSION"
 TARGET_PATH = "src/pgmq/sql/pgmq.sql"
+STAMP_SUFFIX = ".version"
 
 
 def normalize_tag(tag: str) -> str:
@@ -48,6 +49,67 @@ def read_pin(path: str | Path = PIN_PATH) -> str:
 def write_pin(version: str, path: str | Path = PIN_PATH) -> None:
     """Write the pinned PGMQ extension version."""
     Path(path).write_text(f"{version}\n", encoding="utf-8")
+
+
+def stamp_path(output: str | Path) -> Path:
+    """Return the sidecar path that records which version ``output`` came from."""
+    output_path = Path(output)
+    return output_path.with_name(output_path.name + STAMP_SUFFIX)
+
+
+def read_stamp(output: str | Path) -> str | None:
+    """Return the stamped version next to a downloaded SQL file, if present."""
+    path = stamp_path(output)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            return stripped
+    return None
+
+
+def write_stamp(output: str | Path, version: str) -> None:
+    """Record which extension version was written to ``output``."""
+    stamp_path(output).write_text(f"{version}\n", encoding="utf-8")
+
+
+def sql_matches_pin(output: str | Path, version: str) -> bool:
+    """Return True when ``output`` exists and was fetched for ``version``."""
+    output_path = Path(output)
+    return (
+        output_path.exists()
+        and output_path.stat().st_size > 0
+        and read_stamp(output_path) == version
+    )
+
+
+def check_dist(dist_dir: str | Path = "dist") -> None:
+    """Fail if built artifacts are missing the pinned SQL script."""
+    import tarfile
+    import zipfile
+
+    dist = Path(dist_dir)
+    wheels = sorted(dist.glob("*.whl"))
+    sdists = sorted(dist.glob("*.tar.gz"))
+    if not wheels and not sdists:
+        raise SystemExit(f"No wheel or sdist in {dist}")
+
+    def _has_sql(names: list[str], label: str) -> None:
+        if not any(name.endswith("sql/pgmq.sql") for name in names):
+            raise SystemExit(f"{label} is missing pgmq/sql/pgmq.sql")
+        if not any(name.endswith("sql/VERSION") for name in names):
+            raise SystemExit(f"{label} is missing pgmq/sql/VERSION")
+
+    for wheel in wheels:
+        with zipfile.ZipFile(wheel) as handle:
+            _has_sql(handle.namelist(), str(wheel))
+    for sdist in sdists:
+        with tarfile.open(sdist, "r:gz") as handle:
+            _has_sql(handle.getnames(), str(sdist))
+    print(f"Distribution artifacts in {dist} include pgmq.sql and VERSION")
 
 
 def build_raw_url(tag: str) -> str:
@@ -116,7 +178,18 @@ def main() -> None:
         action="store_true",
         help="Write the resolved version to the pin file",
     )
+    parser.add_argument(
+        "--check-dist",
+        metavar="DIR",
+        nargs="?",
+        const="dist",
+        help="Verify wheel/sdist in DIR contain pgmq.sql (default: dist)",
+    )
     args = parser.parse_args()
+
+    if args.check_dist is not None:
+        check_dist(args.check_dist)
+        return
 
     tag = args.tag or f"v{read_pin(args.pin_path)}"
     version = normalize_version(tag)
@@ -125,17 +198,13 @@ def main() -> None:
         print(f"Pinned PGMQ extension version {version} in {args.pin_path}")
 
     output = Path(args.output)
-    if (
-        args.tag is None
-        and not args.force
-        and output.exists()
-        and output.stat().st_size > 0
-    ):
-        print(f"{output} already exists; skipping download (use --force to refresh)")
+    if not args.force and sql_matches_pin(output, version):
+        print(f"{output} already matches {version}; skipping download")
         return
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(fetch_sql(tag), encoding="utf-8")
+    write_stamp(output, version)
     print(f"Downloaded pgmq.sql for PGMQ extension {version} to {output}")
 
 

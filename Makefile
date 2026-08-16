@@ -1,6 +1,6 @@
 SCOPE=src/
 
-.PHONY: format lint test test-env test-sql-install-env install-pgmq-sql vendor-pgmq-sql clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
+.PHONY: format lint test test-env test-sql-install-env install-pgmq-sql vendor-pgmq-sql build clear-postgres run-pgmq-postgres clear-plain-postgres run-plain-postgres docs-serve docs-build docs-deploy
 
 PG_SQL_INSTALL_HOST ?= localhost
 PG_SQL_INSTALL_PORT ?= 5433
@@ -42,10 +42,11 @@ run-plain-postgres:
 
 test: clear-postgres clear-plain-postgres run-pgmq-postgres run-plain-postgres
 	sleep 10  # Give PostgreSQL time to start
+	$(MAKE) vendor-pgmq-sql
 	$(MAKE) test-env
 	$(MAKE) test-sql-install-env
 
-test-env: vendor-pgmq-sql
+test-env:
 	uv run python -m unittest discover -s tests -p "test_*.py"
 
 test-sql-install-env: vendor-pgmq-sql
@@ -59,6 +60,10 @@ ifdef TAG
 else
 	uv run python scripts/vendor_pgmq_sql.py
 endif
+
+build: vendor-pgmq-sql
+	uv build
+	uv run python scripts/vendor_pgmq_sql.py --check-dist
 
 install-pgmq-sql: vendor-pgmq-sql
 	PG_HOST=$(PG_SQL_INSTALL_HOST) \

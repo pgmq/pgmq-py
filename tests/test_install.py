@@ -3,6 +3,7 @@
 import os
 import unittest
 import uuid
+from importlib.resources import files
 from unittest.mock import MagicMock, patch
 
 import psycopg
@@ -135,6 +136,17 @@ PLAIN_POSTGRES_SKIP_REASON = (
     f"(expected at {PLAIN_PG_HOST}:{PLAIN_PG_PORT}). "
     "Run `make run-plain-postgres` or `make test`."
 )
+EMBEDDED_SQL_SKIP_REASON = (
+    "Pinned pgmq.sql is not present. Run `make vendor-pgmq-sql` first."
+)
+
+
+def _embedded_sql_available() -> bool:
+    try:
+        path = files("pgmq").joinpath("sql", "pgmq.sql")
+        return path.is_file() and bool(path.read_text(encoding="utf-8").strip())
+    except Exception:
+        return False
 
 
 class TestEmbeddedInstallSql(unittest.TestCase):
@@ -143,8 +155,6 @@ class TestEmbeddedInstallSql(unittest.TestCase):
         self.assertRegex(version, r"^\d+\.\d+\.\d+$")
 
     def test_get_embedded_sql_version_matches_pin(self):
-        from importlib.resources import files
-
         pin = files("pgmq").joinpath("sql", "VERSION").read_text(encoding="utf-8")
         expected = next(
             line.strip()
@@ -153,6 +163,7 @@ class TestEmbeddedInstallSql(unittest.TestCase):
         )
         self.assertEqual(get_embedded_sql_version(), expected)
 
+    @unittest.skipUnless(_embedded_sql_available(), EMBEDDED_SQL_SKIP_REASON)
     def test_get_embedded_install_sql(self):
         sql_script = get_embedded_install_sql()
         self.assertIn("CREATE SCHEMA IF NOT EXISTS pgmq", sql_script)
@@ -330,8 +341,10 @@ class TestInstallSqlExecution(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    _plain_postgres_ready_for_sql_install(),
-    PLAIN_POSTGRES_SKIP_REASON,
+    _plain_postgres_ready_for_sql_install() and _embedded_sql_available(),
+    PLAIN_POSTGRES_SKIP_REASON
+    if not _plain_postgres_ready_for_sql_install()
+    else EMBEDDED_SQL_SKIP_REASON,
 )
 class TestInstallFromSqlIntegration(unittest.TestCase):
     @classmethod

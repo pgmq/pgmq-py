@@ -88,11 +88,8 @@ jobs:
       - name: Install project
         run: uv sync --all-groups --all-extras
 
-      - name: Fetch pinned PGMQ SQL
-        run: make vendor-pgmq-sql
-
       - name: Build
-        run: uv build
+        run: make build
 
       - name: Publish to PyPI
         run: uv publish

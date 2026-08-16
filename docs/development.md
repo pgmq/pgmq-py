@@ -63,13 +63,16 @@ CI also runs this path in `.github/workflows/sql_install_tests.yml`.
 ### Fetch pinned `pgmq.sql` from a PGMQ extension release
 
 `src/pgmq/sql/pgmq.sql` is **not** committed. The repo pins a PGMQ extension
-semver tag in `src/pgmq/sql/VERSION`. CI, local tests, and `uv build` download
-`pgmq-extension/sql/pgmq.sql` from that tag so the published wheel still
-includes the script for offline install.
+semver tag in `src/pgmq/sql/VERSION`. CI and `make build` download
+`pgmq-extension/sql/pgmq.sql` from that tag, then `uv build` packs it.
+`uv build` alone does not fetch the file.
 
 ```bash
-# Download the pinned release (no-op if the file already exists)
+# Download the pinned release (skips when the file matches VERSION)
 make vendor-pgmq-sql
+
+# Vendor, build, and fail if the wheel is missing pgmq.sql
+make build
 
 # Download a specific extension tag without changing the pin
 make vendor-pgmq-sql TAG=v1.11.1
