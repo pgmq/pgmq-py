@@ -1,0 +1,105 @@
+# pgmq
+
+> Official Python client for [PGMQ](https://github.com/pgmq/pgmq) (Postgres Message Queue). One public API across four backends.
+
+- PyPI: https://pypi.org/project/pgmq/
+- Docs: https://pgmq.github.io/pgmq-py/
+- Source: https://github.com/pgmq/pgmq-py
+- Extension: https://github.com/pgmq/pgmq
+- Maintainer map for agents that change this repo: [AGENTS.md](AGENTS.md)
+
+Python 3.10+. License Apache-2.0. Package version is `1.1.2`.
+
+## Install
+
+```bash
+pip install pgmq
+pip install pgmq[async]                 # asyncpg
+pip install pgmq[sqlalchemy]            # SQLAlchemy sync
+pip install pgmq[sqlalchemy-async]      # SQLAlchemy async + asyncpg
+```
+
+## Clients (identical public methods)
+
+| Import | Backend | Extra | Notes |
+|--------|---------|-------|-------|
+| `from pgmq import PGMQueue` | psycopg (sync) | default | Backward-compat default |
+| `from pgmq import SyncPGMQueue` | psycopg (sync) | default | Same class as `PGMQueue` |
+| `from pgmq import AsyncPGMQueue` | asyncpg | `[async]` | Call `await queue.init()` first |
+| `from pgmq import SQLAlchemyPGMQueue` | SQLAlchemy Engine | `[sqlalchemy]` | |
+| `from pgmq import SQLAlchemyAsyncPGMQueue` | SQLAlchemy AsyncEngine | `[sqlalchemy-async]` | Call `await queue.init()` first |
+
+Optional clients are `None` when the extra is not installed.
+
+## Capacity
+
+Queue management: `create_queue`, `create_partitioned_queue`, `drop_queue`, `list_queues`, `validate_queue_name`
+
+Send: `send`, `send_batch`, `send_topic`, `send_batch_topic` (headers, delay as seconds or `datetime`; `tz` is a `delay` alias)
+
+Topic routing: `bind_topic`, `unbind_topic`, `list_topic_bindings`, `test_routing`
+
+Read: `read`, `read_batch`, `read_with_poll`, `read_grouped`, `read_grouped_with_poll`, `read_grouped_rr`, `read_grouped_rr_with_poll` (optional JSONB `conditional` on recent extension versions)
+
+Pop / delete / archive: `pop`, `delete`, `delete_batch`, `archive`, `archive_batch`, `purge`
+
+Other: `set_vt`, `metrics`, `metrics_all`, `enable_notify`, `disable_notify`, `update_notify`, `list_notify_throttles`, FIFO index helpers, archive partition helpers
+
+Dataclasses: `Message`, `QueueRecord`, `QueueMetrics`, `TopicBinding`, `RoutingResult`, `NotificationThrottle`
+
+Transactions: pass `conn=` to compose operations, or use `transaction` / `async_transaction` / `sqlalchemy_transaction` / `sqlalchemy_async_transaction`
+
+## Postgres setup
+
+Prefer the official extension:
+
+```sql
+CREATE EXTENSION pgmq;
+```
+
+Docker image: `ghcr.io/pgmq/pg18-pgmq:latest`
+
+SQL-only install (hosted Postgres that cannot load extensions):
+
+```python
+from pgmq import install_pgmq_from_sql, PGMQueue
+
+install_pgmq_from_sql(host="localhost", port="5432", username="postgres", password="postgres", database="postgres")
+queue = PGMQueue(init_extension=False, host="localhost", port="5432", username="postgres", password="postgres", database="postgres")
+```
+
+SQL-only install does **not** support extension versioning or `ALTER EXTENSION ... UPDATE`. It applies a pinned snapshot of `pgmq.sql`. Re-running it on an existing `pgmq` schema is not supported. Prefer `CREATE EXTENSION pgmq` when the host allows extensions.
+
+## Configuration
+
+`PGMQConfig` reads `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USERNAME`, `PG_PASSWORD`, `DATABASE_URL`, and `PG_INIT_EXTENSION`. Pass a DSN or field kwargs. Clients use the rebuilt `dsn` / `async_dsn`, not the raw string.
+
+Set `init_extension=False` (or `PG_INIT_EXTENSION=false`) after a SQL-only install so the client does not run `CREATE EXTENSION`.
+
+## Compatibility notes
+
+- `list_queues()` returns `list[QueueRecord]`, not `list[str]`.
+- `read_batch()` is `read(..., qty=batch_size)`.
+- `AsyncPGMQueue` and `SQLAlchemyAsyncPGMQueue` require `await init()` before any operation.
+- Newer features (topic routing, conditional reads, validation helpers, partitioning, advanced notify) need a recent PGMQ extension. They are not available after every SQL-only snapshot.
+
+## Docs
+
+- [Getting started](https://pgmq.github.io/pgmq-py/getting_started/)
+- [SQL installation](https://pgmq.github.io/pgmq-py/sql_installation/)
+- [Configuration](https://pgmq.github.io/pgmq-py/configuration/)
+- [Clients](https://pgmq.github.io/pgmq-py/clients/)
+- [Queue management](https://pgmq.github.io/pgmq-py/queue_management/)
+- [Messages](https://pgmq.github.io/pgmq-py/messages/)
+- [Sending](https://pgmq.github.io/pgmq-py/sending_messages/)
+- [Reading](https://pgmq.github.io/pgmq-py/reading_messages/)
+- [Deleting and archiving](https://pgmq.github.io/pgmq-py/deleting_and_archiving/)
+- [Visibility timeout](https://pgmq.github.io/pgmq-py/visibility_timeout/)
+- [Topic routing](https://pgmq.github.io/pgmq-py/topic_routing/)
+- [Metrics](https://pgmq.github.io/pgmq-py/metrics/)
+- [Notifications](https://pgmq.github.io/pgmq-py/notifications/)
+- [Transactions](https://pgmq.github.io/pgmq-py/transactions/)
+- [Logging](https://pgmq.github.io/pgmq-py/logging/)
+- [Utilities](https://pgmq.github.io/pgmq-py/utilities/)
+- [Backward compatibility](https://pgmq.github.io/pgmq-py/backward_compatibility/)
+- [Development](https://pgmq.github.io/pgmq-py/development/)
