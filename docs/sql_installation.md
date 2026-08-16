@@ -71,19 +71,29 @@ Create clients with `init_extension=False` so the library does not run
 export PG_INIT_EXTENSION=false
 ```
 
-## Versioning
+## Versioning and upgrades
 
-The bundled SQL script includes a version marker
-(`-- pgmq-py bundled SQL version: ...`). `install_pgmq_from_sql()` returns
-that version string.
+SQL-only install does **not** support Postgres extension versioning or
+upgrades. Those are advantages of installing PGMQ as a formal extension
+(`CREATE EXTENSION pgmq` / `ALTER EXTENSION pgmq UPDATE`).
 
-Version upgrades are not supported yet. Re-running the installer on a database
-that already has the `pgmq` schema is not supported and will raise
-`PGMQInstallError` (for example when composite types already exist).
+The Python package ships a snapshot of `pgmq.sql` from a pinned PGMQ
+extension release (`src/pgmq/sql/VERSION`). `install_pgmq_from_sql()`
+returns that pin. It:
+
+- does not record a version in `pg_extension`
+- does not provide an upgrade path between PGMQ versions
+- is not safe to re-run on a database that already has the `pgmq` schema
+  (`PGMQInstallError`, for example when composite types already exist)
+
+Prefer the official PGMQ extension when the host allows custom extensions.
 
 ## Makefile helpers
 
 ```bash
+# Download pinned pgmq.sql (needed in a source checkout)
+make vendor-pgmq-sql
+
 # Start plain Postgres on port 5433 (no PGMQ extension)
 make run-plain-postgres
 

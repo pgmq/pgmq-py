@@ -43,6 +43,8 @@ jobs:
         run: uv python install 3.13
       - name: Install project
         run: uv sync --all-groups --all-extras
+      - name: Fetch pinned PGMQ SQL
+        run: make vendor-pgmq-sql
       - name: Verify PGMQ extension is not pre-installed
         run: |
           uv run python -c "

@@ -1,1 +1,1 @@
-"""Bundled PGMQ SQL install scripts."""
+"""Pinned PGMQ SQL version and downloaded install script."""

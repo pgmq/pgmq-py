@@ -74,8 +74,10 @@ install_pgmq_from_sql(
 See [SQL Installation](sql_installation.md) for connection options, exceptions,
 and Makefile helpers.
 
-Version upgrades are not supported yet. This performs a fresh SQL-only install using
-`CREATE ... IF NOT EXISTS` guards in the upstream script.
+SQL-only install does not support extension versioning or upgrades
+(`CREATE EXTENSION` / `ALTER EXTENSION ... UPDATE`). Those only work when
+PGMQ is installed as a formal Postgres extension. The Python helper applies
+a pinned snapshot of `pgmq.sql` and is not an upgrade tool.
 
 In these environments, automatic extension initialization can be disabled by setting `init_extension=False`
 when creating the client instance.

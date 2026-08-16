@@ -60,20 +60,32 @@ via `PG_SQL_INSTALL_*` variables (see [SQL Installation](sql_installation.md)).
 
 CI also runs this path in `.github/workflows/sql_install_tests.yml`.
 
-### Vendor bundled `pgmq.sql` from a PGMQ extension release
+### Fetch pinned `pgmq.sql` from a PGMQ extension release
 
-The Python package vendors `src/pgmq/sql/pgmq.sql` from the
-[PGMQ extension repository](https://github.com/pgmq/pgmq). Update it when the
-extension cuts a new release:
+`src/pgmq/sql/pgmq.sql` is **not** committed. The repo pins a PGMQ extension
+semver tag in `src/pgmq/sql/VERSION`. CI, local tests, and `uv build` download
+`pgmq-extension/sql/pgmq.sql` from that tag so the published wheel still
+includes the script for offline install.
 
 ```bash
+# Download the pinned release (no-op if the file already exists)
+make vendor-pgmq-sql
+
+# Download a specific extension tag without changing the pin
 make vendor-pgmq-sql TAG=v1.11.1
+
 uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
 ```
 
-#### Automated vendor updates (dual trigger)
+To change the pin locally:
 
-`.github/workflows/vendor_pgmq_sql.yml` keeps bundled SQL current using **two
+```bash
+uv run python scripts/vendor_pgmq_sql.py v1.11.1 --update-pin --force
+```
+
+#### Automated pin updates (dual trigger)
+
+`.github/workflows/vendor_pgmq_sql.yml` keeps the VERSION pin current using **two
 complementary triggers**:
 
 | Trigger | When | Upstream change required? |
@@ -83,7 +95,8 @@ complementary triggers**:
 
 If the extension dispatch fails or is not configured, the daily job picks up the
 new release on the next run. If both fire for the same version, the workflow
-skips when the bundled version already matches (no duplicate PR).
+skips when the pin already matches (no duplicate PR). The PR updates only
+`src/pgmq/sql/VERSION`; CI fetches the SQL and runs client tests.
 
 **Optional fast path** — add to [pgmq/pgmq](https://github.com/pgmq/pgmq)
 `release.yml` after a release is published:

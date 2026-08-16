@@ -45,19 +45,22 @@ test: clear-postgres clear-plain-postgres run-pgmq-postgres run-plain-postgres
 	$(MAKE) test-env
 	$(MAKE) test-sql-install-env
 
-test-env:
+test-env: vendor-pgmq-sql
 	uv run python -m unittest discover -s tests -p "test_*.py"
 
-test-sql-install-env:
+test-sql-install-env: vendor-pgmq-sql
 	PG_SQL_INSTALL_HOST=$(PG_SQL_INSTALL_HOST) \
 	PG_SQL_INSTALL_PORT=$(PG_SQL_INSTALL_PORT) \
 	uv run python -m unittest tests.test_install -v
 
 vendor-pgmq-sql:
-	@if [ -z "$(TAG)" ]; then echo "TAG is required, e.g. make vendor-pgmq-sql TAG=v1.11.1"; exit 1; fi
+ifdef TAG
 	uv run python scripts/vendor_pgmq_sql.py "$(TAG)"
+else
+	uv run python scripts/vendor_pgmq_sql.py
+endif
 
-install-pgmq-sql:
+install-pgmq-sql: vendor-pgmq-sql
 	PG_HOST=$(PG_SQL_INSTALL_HOST) \
 	PG_PORT=$(PG_SQL_INSTALL_PORT) \
 	PG_DATABASE=$(PG_SQL_INSTALL_DATABASE) \

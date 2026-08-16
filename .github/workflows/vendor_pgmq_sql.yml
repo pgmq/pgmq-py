@@ -1,8 +1,10 @@
 name: Vendor PGMQ SQL
 
-# Keeps bundled pgmq.sql aligned with https://github.com/pgmq/pgmq releases.
+# Keeps src/pgmq/sql/VERSION pinned to a pgmq/pgmq semver release.
+# CI and package builds download pgmq.sql from that tag; the SQL file is
+# not committed.
 #
-# Triggers (either can open the vendor PR if the other missed or failed):
+# Triggers (either can open the pin PR if the other missed or failed):
 # 1. repository_dispatch from pgmq/pgmq (optional upstream hook)
 # 2. Daily cron polling the extension repo's latest release
 # 3. workflow_dispatch for manual runs
@@ -60,30 +62,39 @@ jobs:
           fi
           uv run python scripts/pgmq_extension_release_status.py "${ARGS[@]}"
 
-      - name: Bundled SQL already current
+      - name: Pin already current
         if: steps.meta.outputs.needs_update != 'true'
         run: |
-          echo "Bundled SQL is already at ${{ steps.meta.outputs.version }}; nothing to do."
+          echo "SQL pin is already at ${{ steps.meta.outputs.version }}; nothing to do."
 
-      - name: Vendor pgmq.sql from extension release
+      - name: Update version pin and download pgmq.sql
         if: steps.meta.outputs.needs_update == 'true'
-        run: uv run python scripts/vendor_pgmq_sql.py "${{ steps.meta.outputs.tag }}"
+        run: |
+          uv run python scripts/vendor_pgmq_sql.py "${{ steps.meta.outputs.tag }}" \
+            --update-pin --force
 
-      - name: Verify bundled SQL version
+      - name: Install project
+        if: steps.meta.outputs.needs_update == 'true'
+        run: uv sync --all-groups --all-extras
+
+      - name: Verify pinned SQL
         if: steps.meta.outputs.needs_update == 'true'
         run: |
           uv run python - <<'PY'
-          from pgmq.install import get_embedded_sql_version
+          from pgmq.install import get_embedded_install_sql, get_embedded_sql_version
           expected = "${{ steps.meta.outputs.version }}"
           actual = get_embedded_sql_version()
           if actual != expected:
-              raise SystemExit(f"Expected bundled version {expected}, got {actual}")
-          print(f"Bundled SQL version OK: {actual}")
+              raise SystemExit(f"Expected pinned version {expected}, got {actual}")
+          sql = get_embedded_install_sql()
+          if "CREATE SCHEMA IF NOT EXISTS pgmq" not in sql:
+              raise SystemExit("Downloaded SQL is missing CREATE SCHEMA IF NOT EXISTS pgmq")
+          print(f"Pinned SQL version OK: {actual}")
           PY
 
-      - name: Run SQL install tests
+      - name: Run SQL install unit tests
         if: steps.meta.outputs.needs_update == 'true'
-        run: uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
+        run: uv run python -m unittest tests.test_install.TestEmbeddedInstallSql tests.test_vendor_pgmq_sql -v
 
       - name: Create pull request
         if: steps.meta.outputs.needs_update == 'true'
@@ -92,16 +103,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: vendor/pgmq-sql-${{ steps.meta.outputs.version }}
           delete-branch: true
-          title: "chore: vendor pgmq.sql from PGMQ extension ${{ steps.meta.outputs.tag }}"
+          title: "chore: pin pgmq.sql to PGMQ extension ${{ steps.meta.outputs.tag }}"
           body: |
-            Automated update triggered by `${{ steps.meta.outputs.trigger }}` for PGMQ extension release `${{ steps.meta.outputs.tag }}`.
+            Automated pin update triggered by `${{ steps.meta.outputs.trigger }}` for PGMQ extension release `${{ steps.meta.outputs.tag }}`.
 
             - Source: [pgmq/pgmq](https://github.com/pgmq/pgmq) @ `${{ steps.meta.outputs.tag }}`
-            - Bundled file: `src/pgmq/sql/pgmq.sql`
-
-            This workflow also runs on a daily schedule so a missed upstream dispatch
-            is picked up automatically.
+            - Pin file: `src/pgmq/sql/VERSION`
+            - `src/pgmq/sql/pgmq.sql` is downloaded in CI and at package build time; it is not committed.
 
             Merge after review, then cut a `pgmq-py` release so PyPI users receive the new SQL.
-          commit-message: "chore: vendor pgmq.sql from PGMQ extension ${{ steps.meta.outputs.tag }}"
+          commit-message: "chore: pin pgmq.sql to PGMQ extension ${{ steps.meta.outputs.tag }}"
           labels: dependencies,sql

@@ -142,14 +142,22 @@ class TestEmbeddedInstallSql(unittest.TestCase):
         version = get_embedded_sql_version()
         self.assertRegex(version, r"^\d+\.\d+\.\d+$")
 
+    def test_get_embedded_sql_version_matches_pin(self):
+        from importlib.resources import files
+
+        pin = files("pgmq").joinpath("sql", "VERSION").read_text(encoding="utf-8")
+        expected = next(
+            line.strip()
+            for line in pin.splitlines()
+            if line.strip() and not line.startswith("#")
+        )
+        self.assertEqual(get_embedded_sql_version(), expected)
+
     def test_get_embedded_install_sql(self):
         sql_script = get_embedded_install_sql()
         self.assertIn("CREATE SCHEMA IF NOT EXISTS pgmq", sql_script)
         self.assertGreater(len(sql_script), 1000)
-        self.assertIn(
-            f"-- pgmq-py bundled SQL version: {get_embedded_sql_version()}",
-            sql_script,
-        )
+        self.assertNotIn("-- pgmq-py bundled SQL version:", sql_script)
 
     @patch("pgmq.install.files")
     def test_get_embedded_install_sql_read_failure(self, mock_files):
@@ -160,6 +168,18 @@ class TestEmbeddedInstallSql(unittest.TestCase):
             get_embedded_install_sql()
         self.assertIn("Failed to read embedded PGMQ SQL script", str(ctx.exception))
         self.assertIn("pgmq.sql not found", str(ctx.exception))
+        self.assertIn("make vendor-pgmq-sql", str(ctx.exception))
+
+    @patch("pgmq.install.files")
+    def test_get_embedded_sql_version_read_failure(self, mock_files):
+        mock_files.return_value.joinpath.return_value.read_text.side_effect = (
+            FileNotFoundError("VERSION not found")
+        )
+        with self.assertRaises(PGMQInstallError) as ctx:
+            get_embedded_sql_version()
+        self.assertIn(
+            "Failed to read embedded PGMQ SQL version pin", str(ctx.exception)
+        )
 
 
 class TestResolveConfig(unittest.TestCase):

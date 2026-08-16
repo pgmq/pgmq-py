@@ -1,14 +1,13 @@
 """
 Install the SQL-only PGMQ schema.
 
-The package bundles ``pgmq.sql`` for offline installation. Version upgrades
-are not supported yet.
+Published packages include ``pgmq.sql`` fetched from a pinned PGMQ extension
+release. SQL-only install does not support extension versioning or upgrades.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from importlib.resources import files
 from typing import Any, Optional
 
@@ -18,34 +17,39 @@ from psycopg import Connection
 from pgmq.base import PGMQConfig, resolve_pgmq_config
 from pgmq.logger import log_with_context
 
-_BUNDLED_SQL_VERSION_RE = re.compile(
-    r"^-- pgmq-py bundled SQL version: (\S+)", re.MULTILINE
-)
-
 logger = logging.getLogger(__name__)
+
+_SQL_DIR = "sql"
+_VERSION_NAME = "VERSION"
+_SQL_NAME = "pgmq.sql"
+_MISSING_SQL_HINT = (
+    " In a source checkout, run `make vendor-pgmq-sql` to download "
+    "the pinned PGMQ extension SQL."
+)
 
 
 class PGMQInstallError(Exception):
     """Raised when PGMQ SQL installation fails."""
 
 
+def _read_package_text(name: str) -> str:
+    """Read a text file from package data under ``pgmq/sql``."""
+    return files("pgmq").joinpath(_SQL_DIR, name).read_text(encoding="utf-8")
+
+
 def get_embedded_sql_version() -> str:
-    """Return the PGMQ version bundled with this package."""
+    """Return the PGMQ extension version pinned for this package."""
     try:
-        header = (
-            files("pgmq").joinpath("sql", "pgmq.sql").read_text(encoding="utf-8")[:256]
-        )
+        text = _read_package_text(_VERSION_NAME)
     except Exception as exc:
         raise PGMQInstallError(
-            f"Failed to read embedded PGMQ SQL script: {exc}"
+            f"Failed to read embedded PGMQ SQL version pin: {exc}"
         ) from exc
-    match = _BUNDLED_SQL_VERSION_RE.search(header)
-    if not match:
-        raise PGMQInstallError(
-            "Embedded PGMQ SQL script is missing a version marker "
-            "('-- pgmq-py bundled SQL version: ...')"
-        )
-    return match.group(1)
+    for line in text.splitlines():
+        version = line.strip()
+        if version and not version.startswith("#"):
+            return version
+    raise PGMQInstallError("Embedded PGMQ SQL version pin is empty")
 
 
 def get_embedded_install_sql() -> str:
@@ -56,13 +60,12 @@ def get_embedded_install_sql() -> str:
         Raw SQL script contents.
     """
     try:
-        sql_content = (
-            files("pgmq").joinpath("sql", "pgmq.sql").read_text(encoding="utf-8")
-        )
+        sql_content = _read_package_text(_SQL_NAME)
     except Exception as exc:
-        raise PGMQInstallError(
-            f"Failed to read embedded PGMQ SQL script: {exc}"
-        ) from exc
+        message = f"Failed to read embedded PGMQ SQL script: {exc}"
+        if isinstance(exc, FileNotFoundError):
+            message += _MISSING_SQL_HINT
+        raise PGMQInstallError(message) from exc
     if not sql_content.strip():
         raise PGMQInstallError("Embedded PGMQ SQL script is empty")
     return sql_content
@@ -155,8 +158,10 @@ def install_pgmq_from_sql(
         The bundled PGMQ version used for installation.
 
     Note:
-        Version upgrades are not supported yet. This performs a fresh SQL-only
-        install using ``CREATE ... IF NOT EXISTS`` guards in the upstream script.
+        SQL-only install does not support extension versioning or upgrades.
+        Prefer ``CREATE EXTENSION pgmq`` when the host allows extensions.
+        This applies a snapshot of ``pgmq.sql`` using ``CREATE ... IF NOT EXISTS``
+        guards; re-running it on an existing ``pgmq`` schema is not supported.
     """
     version = get_embedded_sql_version()
     log_with_context(

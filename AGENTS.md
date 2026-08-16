@@ -39,7 +39,8 @@ src/pgmq/
   __init__.py               # Public exports, backward-compat aliases, dynamic version
   base.py                   # PGMQConfig, resolve_pgmq_config(), BaseQueue (shared init/logging)
   install.py                # Bundled SQL install (install_pgmq_from_sql, PGMQInstallError)
-  sql/pgmq.sql              # Bundled PGMQ SQL-only schema (version marker in first line)
+  sql/VERSION               # Pinned PGMQ extension semver (source of SQL download)
+  sql/pgmq.sql              # Not committed; fetched from the pin during CI/build
   _client_fields.py         # Shared dataclass fields for all PGMQueue clients
   sync_operations.py        # SyncPGMQueueOperationsMixin — all sync public methods (write once)
   async_operations.py       # AsyncPGMQueueOperationsMixin — all async public methods (write once)
@@ -130,6 +131,9 @@ make test-env
 
 # SQL install tests only (plain Postgres; default PG_SQL_INSTALL_PORT=5433)
 make test-sql-install-env
+
+# Download pinned pgmq.sql (not committed; required for SQL install tests)
+make vendor-pgmq-sql
 
 # Install bundled PGMQ SQL on plain Postgres (default localhost:5433)
 make install-pgmq-sql
@@ -392,6 +396,8 @@ Row-to-object mapping uses `from_row(cls, row, json_parser=None)` classmethods. 
 9. **Conditional reads:** `read()` and `read_with_poll()` accept an optional `conditional: Dict[str, Any]` parameter for JSONB-based message filtering. Requires a recent PGMQ extension version.
 
 10. **Connection strings with special characters:** Always rely on `PGMQConfig` parsing — clients use the re-built `dsn`/`async_dsn`, not the raw input string.
+
+11. **`src/pgmq/sql/pgmq.sql` is not in git.** It is downloaded from the pinned extension tag in `src/pgmq/sql/VERSION`. Run `make vendor-pgmq-sql` in a fresh checkout before SQL install tests or `uv build`.
 
 ---
 

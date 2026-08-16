@@ -12,6 +12,7 @@ on:
     paths:
       - ".github/workflows/pgmq_python.yml"
       - ".github/workflows/sql_install_tests.yml"
+      - "scripts/**"
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
@@ -22,6 +23,7 @@ on:
     paths:
       - ".github/workflows/pgmq_python.yml"
       - ".github/workflows/sql_install_tests.yml"
+      - "scripts/**"
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
@@ -88,6 +90,8 @@ jobs:
         run: uv python install 3.13
       - name: Install project
         run: uv sync --all-groups --all-extras
+      - name: Fetch pinned PGMQ SQL
+        run: make vendor-pgmq-sql
       - name: Extension and SQL install unit tests
         run: make test-env
 

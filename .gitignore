@@ -380,3 +380,7 @@ marimo/_lsp/
 __marimo__/
 .python-version
 .kilo
+
+# Fetched from the pinned PGMQ extension release during CI/build.
+# See src/pgmq/sql/VERSION and scripts/vendor_pgmq_sql.py.
+src/pgmq/sql/pgmq.sql
