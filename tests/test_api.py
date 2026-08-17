@@ -495,7 +495,7 @@ def _try_sync_queue() -> Any:
             username=PG_USERNAME,
             password=PG_PASSWORD,
             verbose=False,
-            init_extension=False,
+            init_extension=True,
         )
         with queue.pool.connection() as conn:
             conn.execute("SELECT 1")

@@ -141,6 +141,8 @@ def map_db_exception(exc: BaseException) -> Optional[APIError]:
         if isinstance(current, (ConnectionError, TimeoutError)):
             return APIError(503, "dependency_unavailable", str(current))
 
+        if name == "InvalidSchemaName" or ("schema" in msg and "does not exist" in msg):
+            return APIError(503, "dependency_unavailable", str(current))
         if name in ("UndefinedTableError", "UndefinedTable") or (
             "does not exist" in msg and "relation" in msg
         ):
