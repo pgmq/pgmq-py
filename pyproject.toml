@@ -28,7 +28,7 @@ authors = [
     { name = "Ali Tavallaie", email = "ali@techbend.dev" },
 ]
 dependencies = [
-    "orjson>=3.11.3",
+    "orjson>=3.11.6",
     "psycopg[binary,pool]>=3.2.10",
 ]
 
