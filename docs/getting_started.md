@@ -20,11 +20,12 @@ pip install pgmq
 | Async | `pip install pgmq[async]` | `asyncpg` |
 | SQLAlchemy (sync) | `pip install pgmq[sqlalchemy]` | SQLAlchemy + `psycopg` |
 | SQLAlchemy (async) | `pip install pgmq[sqlalchemy-async]` | SQLAlchemy + `asyncpg` |
+| HTTP API | `pip install pgmq[fastapi]` | FastAPI + uvicorn (see [HTTP API](http_api.md)) |
 
 You can also install everything at once:
 
 ```bash
-pip install pgmq[async,sqlalchemy,sqlalchemy-async]
+pip install pgmq[async,sqlalchemy,sqlalchemy-async,fastapi]
 ```
 
 ## Start a Local Postgres with PGMQ

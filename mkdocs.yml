@@ -25,6 +25,7 @@ nav:
   - Getting Started: getting_started.md
   - Configuration: configuration.md
   - Clients: clients.md
+  - HTTP API: http_api.md
   - Queue Management: queue_management.md
   - Messages: messages.md
   - Sending Messages: sending_messages.md

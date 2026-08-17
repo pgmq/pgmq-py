@@ -18,6 +18,7 @@ PGMQ (Postgres Message Queue) is a message queue built on Postgres. It provides 
 - **Notifications**: Built-in PostgreSQL `NOTIFY`/`LISTEN` support for real-time message arrival events.
 - **Transactions**: First-class decorators and manual connection injection for complex transactional workflows.
 - **Flexible Configuration**: Environment variables, connection strings, or explicit parameters.
+- **HTTP API**: Optional FastAPI extra (`pgmq[fastapi]`) with a versioned `/v1` REST surface and OpenAPI.
 - **Structured Logging**: stdlib `logging` with optional `loguru` backend, rotation, and structured JSON output.
 
 ## Documentation Structure
@@ -27,6 +28,7 @@ PGMQ (Postgres Message Queue) is a message queue built on Postgres. It provides 
 | [Getting Started](getting_started.md) | Installation, Docker setup, and your first message. |
 | [Configuration](configuration.md) | `PGMQConfig`, connection strings, and environment variables. |
 | [Clients](clients.md) | Choosing and initializing the four client backends. |
+| [HTTP API](http_api.md) | Optional REST adapter: install, auth, `/v1` routes, and embedding. |
 | [Queue Management](queue_management.md) | Creating, dropping, listing, and partitioning queues. |
 | [Messages](messages.md) | Dataclasses: `Message`, `QueueRecord`, `QueueMetrics`, and more. |
 | [Sending Messages](sending_messages.md) | `send`, `send_batch`, headers, and delayed delivery. |

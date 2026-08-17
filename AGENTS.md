@@ -24,6 +24,7 @@ This file contains project-specific context for AI coding agents. The project is
 | Sync driver | `psycopg[binary,pool]>=3.2.10` |
 | Async driver | `asyncpg>=0.30.0` (optional extra `[async]`) |
 | SQLAlchemy | `sqlalchemy>=2.0.0` (optional extras `[sqlalchemy]` / `[sqlalchemy-async]`) |
+| HTTP API | FastAPI + uvicorn + PyYAML (optional extra `[fastapi]`) |
 | JSON | `orjson>=3.11.3` |
 | Lint / format | `ruff>=0.12.12` |
 | Logging | stdlib `logging` with optional `loguru` fallback |
@@ -50,6 +51,7 @@ src/pgmq/
   decorators.py             # Transaction decorators (transaction, async_transaction, sqlalchemy_transaction, sqlalchemy_async_transaction)
   logger.py                 # LoggingManager with dual stdlib/loguru backend
   notify_listener.py        # SyncNotificationListener + AsyncNotificationListener (PostgreSQL NOTIFY/LISTEN)
+  api/                      # Optional HTTP extra (pgmq[fastapi]): factory, routes, YAML config, worker keys
 
 tests/
   utils.py                  # PGMQTestCase base class + env-driven PG_* constants via PGMQConfig
@@ -62,10 +64,12 @@ tests/
   test_notify_listener.py   # NOTIFY/LISTEN tests for all four backends
   test_sql_conversion.py    # Pure unit tests for _sql.py conversions (no DB required)
   test_logger.py            # Logger unit tests
+  test_api.py               # HTTP API (HAS_API guard; skip when extra or DB is missing)
 
 example/
   example_app_sync.py       # Transaction decorator usage examples
   example_app_async.py      # Async transaction usage examples
+  pgmq-api.yaml             # Sample HTTP API config (no secrets)
 
 benches/
   bench.py / runner.py / ... # Locust-based load testing (dependency-group "bench")
@@ -75,6 +79,7 @@ docs/
   getting_started.md          # Installation & quick start
   configuration.md            # PGMQConfig reference
   clients.md                  # Four backend clients
+  http_api.md                 # Optional FastAPI /v1 REST adapter
   queue_management.md         # Create, drop, list, purge queues
   messages.md                 # Dataclasses (Message, QueueMetrics, ...)
   sending_messages.md         # send, send_batch, headers, delay
@@ -123,6 +128,12 @@ make test
 # Run tests against an existing Postgres (no Docker)
 make test-env
 #  → uv run python -m unittest discover -s tests -p "test_*.py"
+
+# HTTP API only
+uv run python -m unittest tests.test_api
+# Serve locally (requires pgmq[fastapi])
+uv run python -m pgmq.api --host 127.0.0.1 --port 8080
+#  → uvicorn pgmq.api.asgi:app, timeout_keep_alive = poll cap + 10
 ```
 
 ### Manual test run (without Makefile)
@@ -407,7 +418,15 @@ Optional clients (`AsyncPGMQueue`, `SQLAlchemyPGMQueue`, `SQLAlchemyAsyncPGMQueu
 pip install pgmq[async]              # asyncpg
 pip install pgmq[sqlalchemy]         # SQLAlchemy sync
 pip install pgmq[sqlalchemy-async]   # SQLAlchemy async + asyncpg
+pip install pgmq[fastapi]            # FastAPI HTTP adapter (not asyncpg, not SQLAlchemy)
 ```
+
+HTTP routes live in `src/pgmq/api/`. They call mixin methods through one adapter:
+`await` async methods, `asyncio.to_thread` for sync methods. Inject any of the
+four clients with `create_app(queue=...)` or `create_router(queue=...)`.
+`create_router` requires `queue`. Default standalone client is lazy `SyncPGMQueue`.
+Do not construct clients with `config=`. Unpack with `queue_kwargs_from_config`.
+Auth SQL is `src/pgmq/api/auth_sql.py`, never `_sql.py` or schema `pgmq`.
 
 ### Dependency Groups (dev)
 

@@ -81,6 +81,7 @@ pip install pgmq
 | `pgmq[async]` | asyncpg |
 | `pgmq[sqlalchemy]` | SQLAlchemy (sync) |
 | `pgmq[sqlalchemy-async]` | SQLAlchemy (async) |
+| `pgmq[fastapi]` | FastAPI HTTP API (`python -m pgmq.api`) |
 
 </div>
 
