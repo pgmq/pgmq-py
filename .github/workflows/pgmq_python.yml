@@ -11,26 +11,32 @@ on:
       - main
     paths:
       - ".github/workflows/pgmq_python.yml"
+      - ".github/workflows/sql_install_tests.yml"
+      - "scripts/**"
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
+      - "Makefile"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/pgmq_python.yml"
+      - ".github/workflows/sql_install_tests.yml"
+      - "scripts/**"
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
+      - "Makefile"
 
 jobs:
   lints:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Install Python 3.13
@@ -40,18 +46,54 @@ jobs:
       - name: Lints / Type Checking
         run: make lint
 
-  tests:
+  extension-tests:
     runs-on: ubuntu-latest
+    services:
+      pgmq:
+        image: ghcr.io/pgmq/pg18-pgmq:latest
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      plain-postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PG_HOST: localhost
+      PG_PORT: "5432"
+      PG_USERNAME: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: postgres
+      PG_SQL_INSTALL_HOST: localhost
+      PG_SQL_INSTALL_PORT: "5433"
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Install Python 3.13
         run: uv python install 3.13
       - name: Install project
         run: uv sync --all-groups --all-extras
-      - name: Unit and Integration Tests
-        run: make test
+      - name: Fetch pinned PGMQ SQL
+        run: make vendor-pgmq-sql
+      - name: Extension and SQL install unit tests
+        run: make test-env
+
+  sql-install-tests:
+    uses: ./.github/workflows/sql_install_tests.yml

@@ -28,6 +28,7 @@ class PGMQTestCase(unittest.TestCase):
             username=PG_USERNAME,
             password=PG_PASSWORD,
             verbose=False,  # Keep test output clean
+            init_extension=_config.init_extension,
         )
         cls.test_queue = f"test_queue_{uuid.uuid4().hex[:8]}"
         cls.test_message = {"hello": "world"}
