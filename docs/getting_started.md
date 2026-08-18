@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.9 or newer.
+- Python 3.10 or newer.
 - A running PostgreSQL instance with the [PGMQ extension](https://github.com/pgmq/pgmq) installed.
 
 ## Installation
@@ -56,6 +56,28 @@ git clone https://github.com/pgmq/pgmq.git
 cd pgmq
 psql -f pgmq-extension/sql/pgmq.sql postgres://postgres:postgres@localhost:5432/postgres
 ```
+
+Or install directly from Python using the SQL script bundled with `pgmq`:
+
+```python
+from pgmq import install_pgmq_from_sql
+
+install_pgmq_from_sql(
+    host="localhost",
+    port="5432",
+    username="postgres",
+    password="postgres",
+    database="postgres",
+)
+```
+
+See [SQL Installation](sql_installation.md) for connection options, exceptions,
+and Makefile helpers.
+
+SQL-only install does not support extension versioning or upgrades
+(`CREATE EXTENSION` / `ALTER EXTENSION ... UPDATE`). Those only work when
+PGMQ is installed as a formal Postgres extension. The Python helper applies
+a pinned snapshot of `pgmq.sql` and is not an upgrade tool.
 
 In these environments, automatic extension initialization can be disabled by setting `init_extension=False`
 when creating the client instance.

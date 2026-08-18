@@ -20,17 +20,18 @@ make test
 ```
 
 This command:
-1. Tears down any existing `pgmq-postgres` container.
-2. Starts a fresh PGMQ-enabled Postgres container.
-3. Waits for it to be ready.
-4. Runs the full test suite.
+1. Tears down any existing `pgmq-postgres` and `pgmq-plain-postgres` containers.
+2. Starts a fresh PGMQ-enabled Postgres container on port `5432`.
+3. Starts a plain Postgres container (no PGMQ extension) on port `5433` for SQL install tests.
+4. Waits for them to be ready.
+5. Runs the full test suite, including SQL install tests against plain Postgres on port `5433`.
 
 ### Manual
 
 If you already have PGMQ installed:
 
 ```bash
-uv run python -m unittest discover -s tests -p "test_*.py"
+make test-env
 ```
 
 Override connection parameters with environment variables:
@@ -43,14 +44,105 @@ export PG_PASSWORD=postgres
 export PG_DATABASE=postgres
 ```
 
+### SQL-only install tests
+
+Run SQL install tests against plain Postgres (defaults to `localhost:5433`):
+
+```bash
+make run-plain-postgres
+sleep 10
+make install-pgmq-sql
+make test-sql-install-env
+```
+
+`make install-pgmq-sql` and `make test-sql-install-env` both target plain Postgres
+via `PG_SQL_INSTALL_*` variables (see [SQL Installation](sql_installation.md)).
+
+CI also runs this path in `.github/workflows/sql_install_tests.yml`.
+
+### Fetch pinned `pgmq.sql` from a PGMQ extension release
+
+`src/pgmq/sql/pgmq.sql` is **not** committed. The repo pins a PGMQ extension
+semver tag in `src/pgmq/sql/VERSION`. CI and `make build` download
+`pgmq-extension/sql/pgmq.sql` from that tag, then `uv build` packs it.
+`uv build` alone does not fetch the file.
+
+```bash
+# Download the pinned release (skips when the file matches VERSION)
+make vendor-pgmq-sql
+
+# Vendor, build, and fail if the wheel is missing pgmq.sql
+make build
+
+# Download a specific extension tag without changing the pin
+make vendor-pgmq-sql TAG=v1.11.1
+
+uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
+```
+
+To change the pin locally:
+
+```bash
+uv run python scripts/vendor_pgmq_sql.py v1.11.1 --update-pin --force
+```
+
+#### Automated pin updates (dual trigger)
+
+`.github/workflows/vendor_pgmq_sql.yml` keeps the VERSION pin current using **two
+complementary triggers**:
+
+| Trigger | When | Upstream change required? |
+|---------|------|---------------------------|
+| **Daily cron** (06:00 UTC) | Polls `pgmq/pgmq` latest release | No |
+| **`repository_dispatch`** | Immediate on extension release | Optional |
+
+If the extension dispatch fails or is not configured, the daily job picks up the
+new release on the next run. If both fire for the same version, the workflow
+skips when the pin already matches (no duplicate PR). The PR updates only
+`src/pgmq/sql/VERSION`; CI fetches the SQL and runs client tests.
+
+**Optional fast path** — add to [pgmq/pgmq](https://github.com/pgmq/pgmq)
+`release.yml` after a release is published:
+
+```yaml
+- name: Trigger pgmq-py SQL vendor update
+  uses: peter-evans/repository-dispatch@v3
+  with:
+    token: ${{ secrets.PGMQ_PY_DISPATCH_TOKEN }}
+    repository: pgmq/pgmq-py
+    event-type: pgmq-extension-release
+    client-payload: '{"tag":"${{ github.ref_name }}"}'
+```
+
+Create `PGMQ_PY_DISPATCH_TOKEN` in the extension repo: a PAT with permission to
+dispatch workflows on `pgmq/pgmq-py`.
+
+**Manual run:**
+
+```bash
+gh workflow run vendor_pgmq_sql.yml --repo pgmq/pgmq-py -f tag=v1.11.1
+```
+
+**Verify dispatch without upstream changes:**
+
+```bash
+gh api repos/pgmq/pgmq-py/dispatches \
+  -f event_type=pgmq-extension-release \
+  -f client_payload='{"tag":"v1.11.1"}'
+```
+
 ## Docker Helpers
 
 ```bash
 # Start a local PGMQ-enabled Postgres
 make run-pgmq-postgres
 
-# Tear it down
+# Start plain Postgres for SQL-only install tests
+make run-plain-postgres
+
+# Tear them down
 make clear-postgres
+make clear-plain-postgres
 ```
 
 ## Lint and Format
