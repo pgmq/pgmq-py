@@ -294,6 +294,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../sql_installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SQL Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../configuration/" class="md-nav__link">
         
   
@@ -803,6 +830,45 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#sql-only-install-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQL-only install tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch-pinned-pgmqsql-from-a-pgmq-extension-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fetch pinned pgmq.sql from a PGMQ extension release
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fetch pinned pgmq.sql from a PGMQ extension release">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automated-pin-updates-dual-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automated pin updates (dual trigger)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -992,6 +1058,45 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#sql-only-install-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SQL-only install tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch-pinned-pgmqsql-from-a-pgmq-extension-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fetch pinned pgmq.sql from a PGMQ extension release
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fetch pinned pgmq.sql from a PGMQ extension release">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#automated-pin-updates-dual-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automated pin updates (dual trigger)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1131,13 +1236,14 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span><span class="nb">test</span>
 </span></code></pre></div>
 <p>This command:
-1. Tears down any existing <code>pgmq-postgres</code> container.
-2. Starts a fresh PGMQ-enabled Postgres container.
-3. Waits for it to be ready.
-4. Runs the full test suite.</p>
+1. Tears down any existing <code>pgmq-postgres</code> and <code>pgmq-plain-postgres</code> containers.
+2. Starts a fresh PGMQ-enabled Postgres container on port <code>5432</code>.
+3. Starts a plain Postgres container (no PGMQ extension) on port <code>5433</code> for SQL install tests.
+4. Waits for them to be ready.
+5. Runs the full test suite, including SQL install tests against plain Postgres on port <code>5433</code>.</p>
 <h3 id="manual">Manual<a class="headerlink" href="#manual" title="Permanent link">&para;</a></h3>
 <p>If you already have PGMQ installed:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>discover<span class="w"> </span>-s<span class="w"> </span>tests<span class="w"> </span>-p<span class="w"> </span><span class="s2">&quot;test_*.py&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>test-env
 </span></code></pre></div>
 <p>Override connection parameters with environment variables:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PG_HOST</span><span class="o">=</span>localhost
@@ -1146,19 +1252,100 @@
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PG_PASSWORD</span><span class="o">=</span>postgres
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PG_DATABASE</span><span class="o">=</span>postgres
 </span></code></pre></div>
+<h3 id="sql-only-install-tests">SQL-only install tests<a class="headerlink" href="#sql-only-install-tests" title="Permanent link">&para;</a></h3>
+<p>Run SQL install tests against plain Postgres (defaults to <code>localhost:5433</code>):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>run-plain-postgres
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>sleep<span class="w"> </span><span class="m">10</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>make<span class="w"> </span>install-pgmq-sql
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>make<span class="w"> </span>test-sql-install-env
+</span></code></pre></div>
+<p><code>make install-pgmq-sql</code> and <code>make test-sql-install-env</code> both target plain Postgres
+via <code>PG_SQL_INSTALL_*</code> variables (see <a href="../sql_installation/">SQL Installation</a>).</p>
+<p>CI also runs this path in <code>.github/workflows/sql_install_tests.yml</code>.</p>
+<h3 id="fetch-pinned-pgmqsql-from-a-pgmq-extension-release">Fetch pinned <code>pgmq.sql</code> from a PGMQ extension release<a class="headerlink" href="#fetch-pinned-pgmqsql-from-a-pgmq-extension-release" title="Permanent link">&para;</a></h3>
+<p><code>src/pgmq/sql/pgmq.sql</code> is <strong>not</strong> committed. The repo pins a PGMQ extension
+semver tag in <code>src/pgmq/sql/VERSION</code>. CI and <code>make build</code> download
+<code>pgmq-extension/sql/pgmq.sql</code> from that tag, then <code>uv build</code> packs it.
+<code>uv build</code> alone does not fetch the file.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Download the pinned release (skips when the file matches VERSION)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>vendor-pgmq-sql
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Vendor, build, and fail if the wheel is missing pgmq.sql</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>make<span class="w"> </span>build
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Download a specific extension tag without changing the pin</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>make<span class="w"> </span>vendor-pgmq-sql<span class="w"> </span><span class="nv">TAG</span><span class="o">=</span>v1.11.1
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>tests.test_install.TestEmbeddedInstallSql<span class="w"> </span>-v
+</span></code></pre></div>
+<p>To change the pin locally:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/vendor_pgmq_sql.py<span class="w"> </span>v1.11.1<span class="w"> </span>--update-pin<span class="w"> </span>--force
+</span></code></pre></div>
+<h4 id="automated-pin-updates-dual-trigger">Automated pin updates (dual trigger)<a class="headerlink" href="#automated-pin-updates-dual-trigger" title="Permanent link">&para;</a></h4>
+<p><code>.github/workflows/vendor_pgmq_sql.yml</code> keeps the VERSION pin current using <strong>two
+complementary triggers</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Trigger</th>
+<th>When</th>
+<th>Upstream change required?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Daily cron</strong> (06:00 UTC)</td>
+<td>Polls <code>pgmq/pgmq</code> latest release</td>
+<td>No</td>
+</tr>
+<tr>
+<td><strong><code>repository_dispatch</code></strong></td>
+<td>Immediate on extension release</td>
+<td>Optional</td>
+</tr>
+</tbody>
+</table>
+<p>If the extension dispatch fails or is not configured, the daily job picks up the
+new release on the next run. If both fire for the same version, the workflow
+skips when the pin already matches (no duplicate PR). The PR updates only
+<code>src/pgmq/sql/VERSION</code>; CI fetches the SQL and runs client tests.</p>
+<p><strong>Optional fast path</strong> — add to <a href="https://github.com/pgmq/pgmq">pgmq/pgmq</a>
+<code>release.yml</code> after a release is published:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Trigger pgmq-py SQL vendor update</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">peter-evans/repository-dispatch@v3</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ secrets.PGMQ_PY_DISPATCH_TOKEN }}</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="nt">repository</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pgmq/pgmq-py</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="nt">event-type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pgmq-extension-release</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="nt">client-payload</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;{&quot;tag&quot;:&quot;${{</span><span class="nv"> </span><span class="s">github.ref_name</span><span class="nv"> </span><span class="s">}}&quot;}&#39;</span>
+</span></code></pre></div>
+<p>Create <code>PGMQ_PY_DISPATCH_TOKEN</code> in the extension repo: a PAT with permission to
+dispatch workflows on <code>pgmq/pgmq-py</code>.</p>
+<p><strong>Manual run:</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>vendor_pgmq_sql.yml<span class="w"> </span>--repo<span class="w"> </span>pgmq/pgmq-py<span class="w"> </span>-f<span class="w"> </span><span class="nv">tag</span><span class="o">=</span>v1.11.1
+</span></code></pre></div>
+<p><strong>Verify dispatch without upstream changes:</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/pgmq/pgmq-py/dispatches<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>-f<span class="w"> </span><span class="nv">event_type</span><span class="o">=</span>pgmq-extension-release<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>-f<span class="w"> </span><span class="nv">client_payload</span><span class="o">=</span><span class="s1">&#39;{&quot;tag&quot;:&quot;v1.11.1&quot;}&#39;</span>
+</span></code></pre></div>
 <h2 id="docker-helpers">Docker Helpers<a class="headerlink" href="#docker-helpers" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Start a local PGMQ-enabled Postgres</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>run-pgmq-postgres
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Tear it down</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>make<span class="w"> </span>clear-postgres
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Start a local PGMQ-enabled Postgres</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>make<span class="w"> </span>run-pgmq-postgres
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Start plain Postgres for SQL-only install tests</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>make<span class="w"> </span>run-plain-postgres
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Tear them down</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>make<span class="w"> </span>clear-postgres
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>make<span class="w"> </span>clear-plain-postgres
 </span></code></pre></div>
 <h2 id="lint-and-format">Lint and Format<a class="headerlink" href="#lint-and-format" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Auto-fix and format</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>format
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Check only</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>make<span class="w"> </span>lint
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Auto-fix and format</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>make<span class="w"> </span>format
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Check only</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>make<span class="w"> </span>lint
 </span></code></pre></div>
 <p>These wrap <code>ruff</code> — the only linter/formatter used in this project.</p>
 <h2 id="writing-tests">Writing Tests<a class="headerlink" href="#writing-tests" title="Permanent link">&para;</a></h2>
@@ -1173,21 +1360,21 @@
 <h2 id="building-documentation">Building Documentation<a class="headerlink" href="#building-documentation" title="Permanent link">&para;</a></h2>
 <p>This documentation is designed for <a href="https://www.mkdocs.org/">MkDocs</a> with the <a href="https://squidfunk.github.io/mkdocs-material/">Material theme</a>.</p>
 <h3 id="install-mkdocs">Install MkDocs<a class="headerlink" href="#install-mkdocs" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pip<span class="w"> </span>install<span class="w"> </span>mkdocs<span class="w"> </span>mkdocs-material<span class="w"> </span>mike
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pip<span class="w"> </span>install<span class="w"> </span>mkdocs<span class="w"> </span>mkdocs-material<span class="w"> </span>mike
 </span></code></pre></div>
 <h3 id="serve-locally">Serve Locally<a class="headerlink" href="#serve-locally" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>mkdocs<span class="w"> </span>serve
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>mkdocs<span class="w"> </span>serve
 </span></code></pre></div>
 <h3 id="build">Build<a class="headerlink" href="#build" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>mkdocs<span class="w"> </span>build
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>mkdocs<span class="w"> </span>build
 </span></code></pre></div>
 <h3 id="versioned-deployment-mike">Versioned Deployment (Mike)<a class="headerlink" href="#versioned-deployment-mike" title="Permanent link">&para;</a></h3>
 <p>This project uses <code>mike</code> to deploy versioned documentation.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Deploy the current version</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>mike<span class="w"> </span>deploy<span class="w"> </span><span class="m">1</span>.1.0<span class="w"> </span>latest
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Set the default version</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>mike<span class="w"> </span>set-default<span class="w"> </span>latest
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Deploy the current version</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>mike<span class="w"> </span>deploy<span class="w"> </span><span class="m">1</span>.1.0<span class="w"> </span>latest
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Set the default version</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>mike<span class="w"> </span>set-default<span class="w"> </span>latest
 </span></code></pre></div>
 <p><code>mike</code> stores versions as separate commits on the <code>gh-pages</code> branch and generates a version switcher in the UI.</p>
 <h2 id="contributing-guidelines">Contributing Guidelines<a class="headerlink" href="#contributing-guidelines" title="Permanent link">&para;</a></h2>
