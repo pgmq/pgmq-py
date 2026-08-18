@@ -1,0 +1,14 @@
+# Sample PGMQ HTTP API config. No secrets.
+# Copy with: python -m pgmq.api init-config --path ./pgmq-api.yaml
+# Put secrets in .env. Issue keys with: python -m pgmq.api issue-key --name billing --apply
+
+listen:
+  host: "127.0.0.1"
+  port: 8080
+auth:
+  mode: none          # none | keys
+  use_db: false       # optional hashed keys in Postgres
+limits:
+  max_poll_seconds: 20
+  max_qty: 100
+  max_batch: 1000

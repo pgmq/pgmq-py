@@ -95,6 +95,14 @@ async_queue = AsyncPGMQueue(config=config)
 await async_queue.init()
 ```
 
+## HTTP API settings
+
+Listen address, API keys, and request caps are **not** fields on `PGMQConfig`.
+They live on `PGMQAPIConfig` (YAML + `PGMQ_API_*` environment variables).
+The HTTP process still uses `PG_*` / `DATABASE_URL` for the database.
+
+See [HTTP API](http_api.md) for the env table, YAML file, and `init-config`.
+
 ## Security Note
 
 `PGMQConfig.conn_string` uses `repr=False` to prevent credentials from leaking into logs or tracebacks when the config object is printed.

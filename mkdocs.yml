@@ -26,6 +26,7 @@ nav:
   - SQL Installation: sql_installation.md
   - Configuration: configuration.md
   - Clients: clients.md
+  - HTTP API: http_api.md
   - Queue Management: queue_management.md
   - Messages: messages.md
   - Sending Messages: sending_messages.md

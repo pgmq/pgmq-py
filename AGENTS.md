@@ -22,12 +22,88 @@ Run these commands in the Verify step. Report the result of each one. Show the o
 | `make test-sql-install-env` | Zero SQL-install test failures against plain Postgres (default port 5433). |
 | `make build` | Vendors pinned `pgmq.sql`, runs `uv build`, and fails if the wheel/sdist omit the script. |
 
+| Layer | Choices |
+|-------|---------|
+| Build / package manager | `uv` (build backend `uv_build`) |
+| Sync driver | `psycopg[binary,pool]>=3.2.10` |
+| Async driver | `asyncpg>=0.30.0` (optional extra `[async]`) |
+| SQLAlchemy | `sqlalchemy>=2.0.0` (optional extras `[sqlalchemy]` / `[sqlalchemy-async]`) |
+| HTTP API | FastAPI + uvicorn + PyYAML (optional extra `[fastapi]`) |
+| JSON | `orjson>=3.11.3` |
+| Lint / format | `ruff>=0.12.12` |
+| Logging | stdlib `logging` with optional `loguru` fallback |
+| Benchmarks | `locust`, `pandas`, `pyyaml`, `scipy`, `typer` |
+| Documentation | `mkdocs`, `mkdocs-material`, `mkdocstrings`, `mike` |
 In a fresh checkout, run `make vendor-pgmq-sql` before SQL-install tests. Use `make build` (not bare `uv build`) so the wheel includes `pgmq.sql`. `src/pgmq/sql/pgmq.sql` is not in git.
 
 Other Makefile targets: `make format`, `make install-pgmq-sql`, `make run-pgmq-postgres`, `make run-plain-postgres`, `make docs-serve`, `make docs-build`.
 
 ## Integration branches
 
+```
+src/pgmq/
+  __init__.py               # Public exports, backward-compat aliases, dynamic version
+  base.py                   # PGMQConfig dataclass + BaseQueue (shared init/logging)
+  _client_fields.py         # Shared dataclass fields for all PGMQueue clients
+  sync_operations.py        # SyncPGMQueueOperationsMixin — all sync public methods (write once)
+  async_operations.py       # AsyncPGMQueueOperationsMixin — all async public methods (write once)
+  queue.py                  # Thin sync psycopg backend (pool + _execute + JSON encoding)
+  async_queue.py            # Thin async asyncpg backend
+  sqlalchemy_queue.py       # Thin sync SQLAlchemy backend
+  sqlalchemy_async_queue.py # Thin async SQLAlchemy backend
+  _sql.py                   # All SQL templates + conversion helpers (%s → $N, %s → :param_N)
+  messages.py               # Dataclasses mapping PGMQ composite types
+  decorators.py             # Transaction decorators (transaction, async_transaction, sqlalchemy_transaction, sqlalchemy_async_transaction)
+  logger.py                 # LoggingManager with dual stdlib/loguru backend
+  notify_listener.py        # SyncNotificationListener + AsyncNotificationListener (PostgreSQL NOTIFY/LISTEN)
+  api/                      # Optional HTTP extra (pgmq[fastapi]): factory, routes, YAML config, worker keys
+
+tests/
+  utils.py                  # PGMQTestCase base class + env-driven PG_* constants via PGMQConfig
+  test_integration.py       # Sync psycopg integration tests
+  test_async_integration.py # Async asyncpg integration tests
+  test_sqlalchemy_integration.py       # Sync SQLAlchemy integration tests
+  test_sqlalchemy_async_integration.py # Async SQLAlchemy integration tests
+  test_features.py          # Partitioning, notifications, validation utilities
+  test_routing.py           # Topic routing (bind/send/unbind/test_routing)
+  test_notify_listener.py   # NOTIFY/LISTEN tests for all four backends
+  test_sql_conversion.py    # Pure unit tests for _sql.py conversions (no DB required)
+  test_logger.py            # Logger unit tests
+  test_api.py               # HTTP API (HAS_API guard; skip when extra or DB is missing)
+
+example/
+  example_app_sync.py       # Transaction decorator usage examples
+  example_app_async.py      # Async transaction usage examples
+  pgmq-api.yaml             # Sample HTTP API config (no secrets)
+
+benches/
+  bench.py / runner.py / ... # Locust-based load testing (dependency-group "bench")
+
+docs/
+  index.md                    # Documentation homepage
+  getting_started.md          # Installation & quick start
+  configuration.md            # PGMQConfig reference
+  clients.md                  # Four backend clients
+  http_api.md                 # Optional FastAPI /v1 REST adapter
+  queue_management.md         # Create, drop, list, purge queues
+  messages.md                 # Dataclasses (Message, QueueMetrics, ...)
+  sending_messages.md         # send, send_batch, headers, delay
+  reading_messages.md         # read, read_with_poll, FIFO variants, conditional reads
+  deleting_and_archiving.md   # delete, archive, pop, purge
+  visibility_timeout.md       # set_vt
+  topic_routing.md            # Topic-based routing
+  metrics.md                  # Queue statistics
+  notifications.md            # NOTIFY/LISTEN & listeners
+  transactions.md             # Decorators & manual transactions
+  logging.md                  # Logging configuration
+  utilities.md                # Validation, FIFO indexes
+  backward_compatibility.md   # Migration notes
+  development.md              # Tests, contributing, MkDocs/Mike
+
+mkdocs.yml                    # MkDocs configuration (Material theme, Mike versioning)
+```
+
+---
 Do not push directly to a branch in this table.
 
 | Branch | Note |
@@ -47,6 +123,18 @@ Follow the `task-protocol` skill for a feature, a bug fix, and a ticket.
 
 Use the plan mode of the current harness. Wait for the user to accept the plan. Do not write product code before that.
 
+# Run tests against an existing Postgres (no Docker)
+make test-env
+#  → uv run python -m unittest discover -s tests -p "test_*.py"
+
+# HTTP API only
+uv run python -m unittest tests.test_api
+# Serve locally (requires pgmq[fastapi])
+uv run python -m pgmq.api --host 127.0.0.1 --port 8080
+#  → uvicorn pgmq.api.asgi:app, timeout_keep_alive = poll cap + 10
+```
+
+### Manual test run (without Makefile)
 Use the `coder` agent for Build and Verify when the harness has that agent.
 
 Use the `reviewer` agent for Review and the pull request draft when the harness has that agent.
