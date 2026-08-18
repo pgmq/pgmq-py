@@ -535,6 +535,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../http_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../queue_management/" class="md-nav__link">
         
   
@@ -1095,10 +1122,15 @@
 <td><code>pip install pgmq[sqlalchemy-async]</code></td>
 <td>SQLAlchemy + <code>asyncpg</code></td>
 </tr>
+<tr>
+<td>HTTP API</td>
+<td><code>pip install pgmq[fastapi]</code></td>
+<td>FastAPI + uvicorn (see <a href="../http_api/">HTTP API</a>)</td>
+</tr>
 </tbody>
 </table>
 <p>You can also install everything at once:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>pgmq<span class="o">[</span>async,sqlalchemy,sqlalchemy-async<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>pgmq<span class="o">[</span>async,sqlalchemy,sqlalchemy-async,fastapi<span class="o">]</span>
 </span></code></pre></div>
 <h2 id="start-a-local-postgres-with-pgmq">Start a Local Postgres with PGMQ<a class="headerlink" href="#start-a-local-postgres-with-pgmq" title="Permanent link">&para;</a></h2>
 <h3 id="docker-recommended">Docker (recommended)<a class="headerlink" href="#docker-recommended" title="Permanent link">&para;</a></h3>

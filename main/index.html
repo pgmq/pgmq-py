@@ -477,6 +477,33 @@
   
   
     <li class="md-nav__item">
+      <a href="http_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="queue_management/" class="md-nav__link">
         
   
@@ -963,6 +990,7 @@
 <li><strong>Notifications</strong>: Built-in PostgreSQL <code>NOTIFY</code>/<code>LISTEN</code> support for real-time message arrival events.</li>
 <li><strong>Transactions</strong>: First-class decorators and manual connection injection for complex transactional workflows.</li>
 <li><strong>Flexible Configuration</strong>: Environment variables, connection strings, or explicit parameters.</li>
+<li><strong>HTTP API</strong>: Optional FastAPI extra (<code>pgmq[fastapi]</code>) with a versioned <code>/v1</code> REST surface and OpenAPI.</li>
 <li><strong>Structured Logging</strong>: stdlib <code>logging</code> with optional <code>loguru</code> backend, rotation, and structured JSON output.</li>
 </ul>
 <h2 id="documentation-structure">Documentation Structure<a class="headerlink" href="#documentation-structure" title="Permanent link">&para;</a></h2>
@@ -985,6 +1013,10 @@
 <tr>
 <td><a href="clients/">Clients</a></td>
 <td>Choosing and initializing the four client backends.</td>
+</tr>
+<tr>
+<td><a href="http_api/">HTTP API</a></td>
+<td>Optional REST adapter: install, auth, <code>/v1</code> routes, and embedding.</td>
 </tr>
 <tr>
 <td><a href="queue_management/">Queue Management</a></td>

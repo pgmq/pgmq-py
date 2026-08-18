@@ -477,6 +477,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#http-api-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP API settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-note" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -510,6 +521,33 @@
     
   
     Clients
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP API
   
 
     
@@ -1021,6 +1059,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#http-api-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP API settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-note" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1247,6 +1296,11 @@
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">async_queue</span> <span class="o">=</span> <span class="n">AsyncPGMQueue</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="k">await</span> <span class="n">async_queue</span><span class="o">.</span><span class="n">init</span><span class="p">()</span>
 </span></code></pre></div>
+<h2 id="http-api-settings">HTTP API settings<a class="headerlink" href="#http-api-settings" title="Permanent link">&para;</a></h2>
+<p>Listen address, API keys, and request caps are <strong>not</strong> fields on <code>PGMQConfig</code>.
+They live on <code>PGMQAPIConfig</code> (YAML + <code>PGMQ_API_*</code> environment variables).
+The HTTP process still uses <code>PG_*</code> / <code>DATABASE_URL</code> for the database.</p>
+<p>See <a href="../http_api/">HTTP API</a> for the env table, YAML file, and <code>init-config</code>.</p>
 <h2 id="security-note">Security Note<a class="headerlink" href="#security-note" title="Permanent link">&para;</a></h2>
 <p><code>PGMQConfig.conn_string</code> uses <code>repr=False</code> to prevent credentials from leaking into logs or tracebacks when the config object is printed.</p>
 
