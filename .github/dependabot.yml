@@ -1,0 +1,38 @@
+# Dependabot version updates. Security alerts already run without this file.
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates
+# https://docs.astral.sh/uv/guides/integration/dependabot/
+
+version: 2
+
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 8
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+    groups:
+      runtime:
+        patterns:
+          - "orjson"
+          - "psycopg"
+          - "psycopg-*"
+          - "asyncpg"
+          - "sqlalchemy"
+      python-dev:
+        dependency-type: "development"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
