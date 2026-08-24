@@ -83,7 +83,7 @@ def main() -> None:
     parser.add_argument(
         "--trigger",
         default="manual",
-        help="Workflow trigger name for logging and PR bodies",
+        help="Workflow trigger name for logging and issue bodies",
     )
     parser.add_argument(
         "--github-output",

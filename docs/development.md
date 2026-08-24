@@ -86,9 +86,9 @@ To change the pin locally:
 uv run python scripts/vendor_pgmq_sql.py v1.11.1 --update-pin --force
 ```
 
-#### Automated pin updates (dual trigger)
+#### Automated pin notices (dual trigger)
 
-`.github/workflows/vendor_pgmq_sql.yml` keeps the VERSION pin current using **two
+`.github/workflows/vendor_pgmq_sql.yml` watches the VERSION pin using **two
 complementary triggers**:
 
 | Trigger | When | Upstream change required? |
@@ -96,10 +96,12 @@ complementary triggers**:
 | **Daily cron** (06:00 UTC) | Polls `pgmq/pgmq` latest release | No |
 | **`repository_dispatch`** | Immediate on extension release | Optional |
 
-If the extension dispatch fails or is not configured, the daily job picks up the
-new release on the next run. If both fire for the same version, the workflow
-skips when the pin already matches (no duplicate PR). The PR updates only
-`src/pgmq/sql/VERSION`; CI fetches the SQL and runs client tests.
+The `pgmq` org does not allow `GITHUB_TOKEN` to create pull requests. When the
+pin is behind a release, the workflow opens a `dependencies` issue. Maintainers
+update `src/pgmq/sql/VERSION` and open the pull request. If the extension
+dispatch fails or is not configured, the daily job picks up the new release on
+the next run. If both fire for the same version, the workflow reuses the open
+issue (no duplicate issue).
 
 **Optional fast path** — add to [pgmq/pgmq](https://github.com/pgmq/pgmq)
 `release.yml` after a release is published:

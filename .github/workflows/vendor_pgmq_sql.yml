@@ -1,10 +1,10 @@
 name: Vendor PGMQ SQL
 
-# Keeps src/pgmq/sql/VERSION pinned to a pgmq/pgmq semver release.
-# CI and package builds download pgmq.sql from that tag; the SQL file is
-# not committed.
+# Opens a tracking issue when src/pgmq/sql/VERSION is behind a
+# pgmq/pgmq semver release. Maintainers open the pin pull request.
+# The pgmq org does not allow GITHUB_TOKEN to create pull requests.
 #
-# Triggers (either can open the pin PR if the other missed or failed):
+# Triggers:
 # 1. repository_dispatch from pgmq/pgmq (optional upstream hook)
 # 2. Daily cron polling the extension repo's latest release
 # 3. workflow_dispatch for manual runs
@@ -24,27 +24,12 @@ on:
         type: string
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  issues: write
 
 jobs:
   vendor-sql:
     runs-on: ubuntu-latest
-    services:
-      plain-postgres:
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      PG_SQL_INSTALL_HOST: localhost
-      PG_SQL_INSTALL_PORT: "5432"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -75,62 +60,66 @@ jobs:
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ARGS+=(--tag "${{ inputs.tag }}")
           fi
-          uv run python scripts/pgmq_extension_release_status.py "${ARGS[@]}"
+          uv run --python 3.13 --no-project python \
+            scripts/pgmq_extension_release_status.py "${ARGS[@]}"
 
       - name: Pin already current
         if: steps.meta.outputs.needs_update != 'true'
         run: |
           echo "SQL pin is already at ${{ steps.meta.outputs.version }}; nothing to do."
 
-      - name: Update version pin and download pgmq.sql
+      - name: Open tracking issue
         if: steps.meta.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          TRIGGER: ${{ steps.meta.outputs.trigger }}
         run: |
-          uv run python scripts/vendor_pgmq_sql.py "${{ steps.meta.outputs.tag }}" \
-            --update-pin --force
+          set -euo pipefail
+          TITLE="chore: pin pgmq.sql to PGMQ extension ${TAG}"
+          PINNED="$(tr -d '[:space:]' < src/pgmq/sql/VERSION)"
+          EXISTING="$(
+            gh issue list --state open --limit 100 --json number,title \
+              --jq "[.[] | select(.title == \"${TITLE}\") | .number][0] // empty"
+          )"
+          if [ -n "${EXISTING}" ]; then
+            echo "Issue #${EXISTING} already tracks this pin."
+            echo "Issue already open: https://github.com/${GITHUB_REPOSITORY}/issues/${EXISTING}" \
+              >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
 
-      - name: Install project
-        if: steps.meta.outputs.needs_update == 'true'
-        run: uv sync --all-groups --all-extras
+          BODY_FILE="${RUNNER_TEMP}/pgmq-pin-issue.md"
+          {
+            echo "Automated pin notice from \`${TRIGGER}\` for PGMQ extension \`${TAG}\`."
+            echo
+            echo "The \`pgmq\` org does not allow GitHub Actions to create pull requests. Open the pin pull request by hand."
+            echo
+            echo "- Source: https://github.com/pgmq/pgmq/releases/tag/${TAG}"
+            echo "- Current pin: \`${PINNED}\`"
+            echo "- Target pin: \`${VERSION}\` (\`${TAG}\`)"
+            echo "- Pin file: \`src/pgmq/sql/VERSION\`"
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/vendor/pgmq-sql-${VERSION}" \
+              >/dev/null 2>&1; then
+              echo "- Branch already exists: https://github.com/${GITHUB_REPOSITORY}/compare/main...vendor/pgmq-sql-${VERSION}?expand=1"
+            fi
+            echo
+            echo "Update the pin:"
+            echo
+            echo '```bash'
+            echo "uv run python scripts/vendor_pgmq_sql.py ${TAG} --update-pin --force"
+            echo "make test-sql-install-env"
+            echo '```'
+            echo
+            echo "Merge after review, then cut a \`pgmq-py\` release so PyPI users receive the new SQL."
+          } > "${BODY_FILE}"
 
-      - name: Verify pinned SQL
-        if: steps.meta.outputs.needs_update == 'true'
-        run: |
-          uv run python - <<'PY'
-          from pgmq.install import get_embedded_install_sql, get_embedded_sql_version
-          expected = "${{ steps.meta.outputs.version }}"
-          actual = get_embedded_sql_version()
-          if actual != expected:
-              raise SystemExit(f"Expected pinned version {expected}, got {actual}")
-          sql = get_embedded_install_sql()
-          if "CREATE SCHEMA IF NOT EXISTS pgmq" not in sql:
-              raise SystemExit("Downloaded SQL is missing CREATE SCHEMA IF NOT EXISTS pgmq")
-          print(f"Pinned SQL version OK: {actual}")
-          PY
-
-      - name: Run SQL install unit tests
-        if: steps.meta.outputs.needs_update == 'true'
-        run: uv run python -m unittest tests.test_install.TestEmbeddedInstallSql tests.test_vendor_pgmq_sql -v
-
-      - name: Run SQL install integration tests
-        if: steps.meta.outputs.needs_update == 'true'
-        run: make test-sql-install-env
-
-      - name: Create pull request
-        if: steps.meta.outputs.needs_update == 'true'
-        uses: peter-evans/create-pull-request@v8
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: vendor/pgmq-sql-${{ steps.meta.outputs.version }}
-          delete-branch: true
-          title: "chore: pin pgmq.sql to PGMQ extension ${{ steps.meta.outputs.tag }}"
-          body: |
-            Automated pin update triggered by `${{ steps.meta.outputs.trigger }}` for PGMQ extension release `${{ steps.meta.outputs.tag }}`.
-
-            - Source: [pgmq/pgmq](https://github.com/pgmq/pgmq) @ `${{ steps.meta.outputs.tag }}`
-            - Pin file: `src/pgmq/sql/VERSION`
-            - `src/pgmq/sql/pgmq.sql` is downloaded in CI and by `make build`; it is not committed.
-            - This workflow runs SQL-install tests against plain Postgres before opening the PR.
-
-            Merge after review, then cut a `pgmq-py` release so PyPI users receive the new SQL.
-          commit-message: "chore: pin pgmq.sql to PGMQ extension ${{ steps.meta.outputs.tag }}"
-          labels: dependencies,sql
+          URL="$(
+            gh issue create \
+              --title "${TITLE}" \
+              --label dependencies \
+              --body-file "${BODY_FILE}"
+          )"
+          echo "Opened ${URL}"
+          echo "Opened tracking issue: ${URL}" >> "${GITHUB_STEP_SUMMARY}"
