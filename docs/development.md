@@ -75,7 +75,7 @@ make vendor-pgmq-sql
 make build
 
 # Download a specific extension tag without changing the pin
-make vendor-pgmq-sql TAG=v1.11.1
+make vendor-pgmq-sql TAG=v1.13.0
 
 uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
 ```
@@ -83,7 +83,7 @@ uv run python -m unittest tests.test_install.TestEmbeddedInstallSql -v
 To change the pin locally:
 
 ```bash
-uv run python scripts/vendor_pgmq_sql.py v1.11.1 --update-pin --force
+uv run python scripts/vendor_pgmq_sql.py v1.13.0 --update-pin --force
 ```
 
 #### Automated pin notices (dual trigger)
@@ -122,7 +122,7 @@ dispatch workflows on `pgmq/pgmq-py`.
 **Manual run:**
 
 ```bash
-gh workflow run vendor_pgmq_sql.yml --repo pgmq/pgmq-py -f tag=v1.11.1
+gh workflow run vendor_pgmq_sql.yml --repo pgmq/pgmq-py -f tag=v1.13.0
 ```
 
 **Verify dispatch without upstream changes:**
@@ -130,7 +130,7 @@ gh workflow run vendor_pgmq_sql.yml --repo pgmq/pgmq-py -f tag=v1.11.1
 ```bash
 gh api repos/pgmq/pgmq-py/dispatches \
   -f event_type=pgmq-extension-release \
-  -f client_payload='{"tag":"v1.11.1"}'
+  -f client_payload='{"tag":"v1.13.0"}'
 ```
 
 ## Docker Helpers
