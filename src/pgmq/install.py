@@ -14,7 +14,7 @@ from typing import Any, Optional
 import psycopg
 from psycopg import Connection
 
-from pgmq.base import PGMQConfig, resolve_pgmq_config
+from pgmq.base import PGMQConfig, application_name_kwargs, resolve_pgmq_config
 from pgmq.logger import log_with_context
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,9 @@ def install_pgmq_sql(
         )
         try:
             conn = psycopg.connect(
-                resolved_config.conn_string or resolved_config.dsn, autocommit=False
+                resolved_config.conn_string or resolved_config.dsn,
+                autocommit=False,
+                **application_name_kwargs(resolved_config.application_name),
             )
             own_conn = True
         except Exception as exc:

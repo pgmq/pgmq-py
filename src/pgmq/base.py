@@ -55,6 +55,7 @@ class PGMQConfig:
     init_extension: bool = field(
         default_factory=lambda: _env_bool("PG_INIT_EXTENSION", True)
     )
+    application_name: Optional[str] = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         """Validate and normalize configuration."""
@@ -72,6 +73,12 @@ class PGMQConfig:
         # Validate required fields
         if not all([self.host, self.port, self.database, self.username, self.password]):
             raise ValueError("Incomplete database connection information provided.")
+
+        if self.application_name is not None and (
+            not isinstance(self.application_name, str)
+            or not self.application_name.strip()
+        ):
+            raise ValueError("application_name must be a non-blank string or None")
 
     def _parse_conn_string(self, conn_string: str) -> None:
         """
@@ -165,6 +172,12 @@ class PGMQConfig:
         user = urllib.parse.quote_plus(self.username)
         password = urllib.parse.quote_plus(self.password)
         return f"postgresql://{user}:{password}@{self.host}:{self.port}/{self.database}"
+
+
+def application_name_kwargs(name: Optional[str]) -> dict[str, str]:
+    if name is None:
+        return {}
+    return {"application_name": name}
 
 
 _CONNECTION_FIELDS = frozenset(

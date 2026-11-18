@@ -72,7 +72,7 @@ SQL-only install does **not** support extension versioning or `ALTER EXTENSION .
 
 ## Configuration
 
-`PGMQConfig` reads `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USERNAME`, `PG_PASSWORD`, `DATABASE_URL`, and `PG_INIT_EXTENSION`. Pass a DSN or field kwargs. Clients use the rebuilt `dsn` / `async_dsn`, not the raw string.
+`PGMQConfig` reads `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USERNAME`, `PG_PASSWORD`, `DATABASE_URL`, and `PG_INIT_EXTENSION`. Pass a DSN or field kwargs. Clients use the rebuilt `dsn` / `async_dsn`, not the raw string. Optional keyword-only `application_name` is sent only when this package opens the connection; `None` omits it, and a supplied pool or engine is not changed.
 
 Set `init_extension=False` (or `PG_INIT_EXTENSION=false`) after a SQL-only install so the client does not run `CREATE EXTENSION`.
 

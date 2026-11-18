@@ -74,6 +74,7 @@ queue = PGMQueue(
 | `log_rotation_size` | `str` | `10 MB` | Rotation threshold (loguru format). |
 | `log_retention` | `str` | `1 week` | Log retention period (loguru format). |
 | `init_extension` | `bool` | `True` | Automatically run `CREATE EXTENSION IF NOT EXISTS pgmq`. |
+| `application_name` | `str \| None` | `None` | Keyword-only PostgreSQL `application_name` for connections this client opens. `None` does not set it. A supplied pool or engine is left unchanged. |
 
 ## Reusing a Config Object
 

@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, text, Engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
-from pgmq.base import BaseQueue
+from pgmq.base import BaseQueue, application_name_kwargs
 from pgmq._client_fields import PGMQueueClientFields
 from pgmq import _sql
 from pgmq.decorators import sqlalchemy_transaction
@@ -51,12 +51,17 @@ class SQLAlchemySyncBackend:
         connection_url = self.config.async_dsn.replace(
             "postgresql://", "postgresql+psycopg://", 1
         )
+        engine_options: Dict[str, Any] = {}
+        name_kwargs = application_name_kwargs(self.config.application_name)
+        if name_kwargs:
+            engine_options["connect_args"] = name_kwargs
         self.engine = create_engine(
             connection_url,
             poolclass=QueuePool,
             pool_size=self.config.pool_size,
             max_overflow=20,
             pool_pre_ping=True,
+            **engine_options,
         )
 
     def _init_extensions(self) -> None:
