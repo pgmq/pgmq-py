@@ -171,6 +171,8 @@ class TestEmbeddedInstallSql(unittest.TestCase):
         self.assertNotIn("-- pgmq-py bundled SQL version:", sql_script)
         self.assertIn("default_partition_length", sql_script)
         self.assertIn("read_grouped_head_with_poll", sql_script)
+        self.assertIn("has_column_privilege", sql_script)
+        self.assertIn("_vt_idx", sql_script)
 
     @patch("pgmq.install.files")
     def test_get_embedded_install_sql_read_failure(self, mock_files):
