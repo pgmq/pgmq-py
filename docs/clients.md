@@ -135,6 +135,16 @@ async with queue.session() as session:
 await queue.close()
 ```
 
+## Application name
+
+`application_name` is keyword-only. Use it when PostgreSQL should show a name on `pg_stat_activity`. The default `None` leaves the setting unset.
+
+```python
+queue = PGMQueue(conn_string=dsn, application_name="worker/pgmq")
+```
+
+The client passes the name only when it opens the connection. A pool or engine that you supply is not modified and is not recreated.
+
 ## Choosing a Backend
 
 | Use Case | Recommended Client |

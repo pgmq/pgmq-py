@@ -66,6 +66,7 @@ def queue_kwargs_from_config(config: PGMQConfig) -> Dict[str, Any]:
         "log_rotation": config.log_rotation,
         "log_rotation_size": config.log_rotation_size,
         "log_retention": config.log_retention,
+        "application_name": config.application_name,
     }
 
 

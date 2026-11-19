@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, async_sessi
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlalchemy import text
 
-from pgmq.base import BaseQueue
+from pgmq.base import BaseQueue, application_name_kwargs
 from pgmq._client_fields import PGMQueueClientFields
 from pgmq import _sql
 from pgmq.decorators import sqlalchemy_async_transaction
@@ -66,12 +66,17 @@ class SQLAlchemyAsyncBackend:
         connection_url = self.config.async_dsn.replace(
             "postgresql://", "postgresql+asyncpg://", 1
         )
+        engine_options: Dict[str, Any] = {}
+        name_kwargs = application_name_kwargs(self.config.application_name)
+        if name_kwargs:
+            engine_options["connect_args"] = {"server_settings": name_kwargs}
         self.engine = create_async_engine(
             connection_url,
             poolclass=AsyncAdaptedQueuePool,
             pool_size=self.config.pool_size,
             max_overflow=20,
             pool_pre_ping=True,
+            **engine_options,
         )
 
         if self.config.init_extension:

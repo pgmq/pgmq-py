@@ -13,7 +13,7 @@ import logging
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
-from pgmq.base import BaseQueue
+from pgmq.base import BaseQueue, application_name_kwargs
 from pgmq._client_fields import PGMQueueClientFields
 from pgmq.decorators import transaction
 from pgmq.logger import log_with_context
@@ -46,11 +46,16 @@ class PsycopgSyncBackend:
 
         self._own_pool = True
         log_with_context(self.logger, logging.DEBUG, "Creating connection pool")
+        pool_options: Dict[str, Any] = {}
+        name_kwargs = application_name_kwargs(self.config.application_name)
+        if name_kwargs:
+            pool_options["kwargs"] = name_kwargs
         self.pool = ConnectionPool(
             self.config.dsn,
             min_size=1,
             max_size=self.config.pool_size,
             open=True,
+            **pool_options,
         )
 
     def close(self) -> None:

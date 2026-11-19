@@ -33,6 +33,7 @@ class PGMQueueClientFields:
     init_extension: bool = field(
         default_factory=lambda: _env_bool("PG_INIT_EXTENSION", True)
     )
+    application_name: Optional[str] = field(default=None, kw_only=True)
     structured_logging: bool = False
     log_rotation: bool = False
     log_rotation_size: str = "10 MB"

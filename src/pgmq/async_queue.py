@@ -14,7 +14,7 @@ import asyncpg
 from asyncpg import Pool
 import orjson
 
-from pgmq.base import BaseQueue
+from pgmq.base import BaseQueue, application_name_kwargs
 from pgmq._client_fields import PGMQueueClientFields
 from pgmq import _sql
 from pgmq.decorators import async_transaction
@@ -62,10 +62,15 @@ class AsyncpgBackend:
 
         self._own_pool = True
         log_with_context(self.logger, logging.DEBUG, "Creating asyncpg pool")
+        pool_options: Dict[str, Any] = {}
+        name_kwargs = application_name_kwargs(self.config.application_name)
+        if name_kwargs:
+            pool_options["server_settings"] = name_kwargs
         self.pool = await asyncpg.create_pool(
             self.config.async_dsn,
             min_size=1,
             max_size=self.config.pool_size,
+            **pool_options,
         )
 
         if self.config.init_extension:

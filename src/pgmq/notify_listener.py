@@ -26,6 +26,7 @@ try:
 except ImportError:
     ASYNC_AVAILABLE = False
 
+from pgmq.base import application_name_kwargs
 from pgmq.logger import log_with_context
 
 
@@ -72,7 +73,11 @@ class SyncNotificationListener:
 
         try:
             # Autocommit required for LISTEN
-            self._conn = psycopg.connect(self.dsn, autocommit=True)
+            self._conn = psycopg.connect(
+                self.dsn,
+                autocommit=True,
+                **application_name_kwargs(self.queue_client.config.application_name),
+            )
             # Quote channel name to handle any special characters safely
             self._conn.execute(f'LISTEN "{channel}";')
 
@@ -185,7 +190,13 @@ class AsyncNotificationListener:
         )
 
         try:
-            self._conn = await asyncpg.connect(self.dsn)
+            connect_options: Dict[str, Any] = {}
+            name_kwargs = application_name_kwargs(
+                self.queue_client.config.application_name
+            )
+            if name_kwargs:
+                connect_options["server_settings"] = name_kwargs
+            self._conn = await asyncpg.connect(self.dsn, **connect_options)
             await self._conn.add_listener(channel, self._on_notification)
 
             while not self._stop_event.is_set():
