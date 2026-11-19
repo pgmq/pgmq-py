@@ -499,6 +499,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#application-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Application name
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#choosing-a-backend" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1049,6 +1060,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#application-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Application name
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#choosing-a-backend" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1229,6 +1251,11 @@
 </span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
 </span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="k">await</span> <span class="n">queue</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </span></code></pre></div>
+<h2 id="application-name">Application name<a class="headerlink" href="#application-name" title="Permanent link">&para;</a></h2>
+<p><code>application_name</code> is keyword-only. Use it when PostgreSQL should show a name on <code>pg_stat_activity</code>. The default <code>None</code> leaves the setting unset.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">queue</span> <span class="o">=</span> <span class="n">PGMQueue</span><span class="p">(</span><span class="n">conn_string</span><span class="o">=</span><span class="n">dsn</span><span class="p">,</span> <span class="n">application_name</span><span class="o">=</span><span class="s2">&quot;worker/pgmq&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The client passes the name only when it opens the connection. A pool or engine that you supply is not modified and is not recreated.</p>
 <h2 id="choosing-a-backend">Choosing a Backend<a class="headerlink" href="#choosing-a-backend" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1258,25 +1285,25 @@
 </table>
 <h2 id="unified-api">Unified API<a class="headerlink" href="#unified-api" title="Permanent link">&para;</a></h2>
 <p>Regardless of backend, all clients expose the same methods:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Queue management</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="o">.</span><span class="n">create_queue</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="o">.</span><span class="n">create_partitioned_queue</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="o">.</span><span class="n">drop_queue</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="o">.</span><span class="n">list_queues</span><span class="p">()</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Messaging</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="o">.</span><span class="n">send_batch</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msgs</span><span class="p">)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">vt</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="o">.</span><span class="n">read_with_poll</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">vt</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">qty</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># Lifecycle</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msg_id</span><span class="p">)</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="o">.</span><span class="n">archive</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msg_id</span><span class="p">)</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="o">.</span><span class="n">purge</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1"># And more...</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Queue management</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="o">.</span><span class="n">create_queue</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="o">.</span><span class="n">create_partitioned_queue</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="o">.</span><span class="n">drop_queue</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="o">.</span><span class="n">list_queues</span><span class="p">()</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Messaging</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="o">.</span><span class="n">send_batch</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msgs</span><span class="p">)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">vt</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="o">.</span><span class="n">read_with_poll</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">vt</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">qty</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Lifecycle</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msg_id</span><span class="p">)</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="o">.</span><span class="n">archive</span><span class="p">(</span><span class="n">queue</span><span class="p">,</span> <span class="n">msg_id</span><span class="p">)</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="o">.</span><span class="n">purge</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="c1"># And more...</span>
 </span></code></pre></div>
 <p>See the remaining documentation sections for detailed usage of each feature.</p>
 

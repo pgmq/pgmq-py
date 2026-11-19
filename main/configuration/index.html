@@ -1277,6 +1277,12 @@
 <td><code>True</code></td>
 <td>Automatically run <code>CREATE EXTENSION IF NOT EXISTS pgmq</code>.</td>
 </tr>
+<tr>
+<td><code>application_name</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Keyword-only PostgreSQL <code>application_name</code> for connections this client opens. <code>None</code> does not set it. A supplied pool or engine is left unchanged.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="reusing-a-config-object">Reusing a Config Object<a class="headerlink" href="#reusing-a-config-object" title="Permanent link">&para;</a></h2>
